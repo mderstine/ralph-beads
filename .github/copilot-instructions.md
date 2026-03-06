@@ -2,6 +2,46 @@
 
 This project uses the Ralph-Beads framework for autonomous, dependency-aware development. These instructions apply to every Copilot chat session in this workspace.
 
+## How It Works
+
+```
+beads-pm agent → specs → task graph → beads-dev agent → implement → bd close → git commit
+```
+
+Each agent invocation gets fresh context. Beads replaces IMPLEMENTATION_PLAN.md as the
+persistent state machine between iterations. The user writes specs; the framework breaks
+them into dependency-ordered tasks and builds them one at a time.
+
+## User's Role
+
+The user directs by writing specs (`specs/`), setting quality gates (`AGENTS.md`), and
+watching agent output. They intervene via `bd` CLI commands to re-prioritize, add blockers,
+skip tasks, or inject urgent work.
+
+## VS Code Agent Invocations
+
+Instead of running `loop.sh`, invoke agents directly in Copilot Chat:
+
+| Goal | Invocation |
+|------|-----------|
+| Convert specs to task graph | Invoke `@beads-pm` agent |
+| Implement one ready task | Invoke `@beads-dev` agent |
+| Check project status | Run `bd prime` in terminal |
+| Create a new issue | Use the `beads-create` skill |
+| Triage/prioritize backlog | Use the `beads-triage` skill |
+
+## Project Structure
+
+- `specs/` — Requirement documents (one per topic)
+- `AGENTS.md` — Operational guide with build commands and patterns
+- `PROMPT_plan.md` — Planning mode instructions (specs to task graph)
+- `PROMPT_build.md` — Build mode instructions (claim, implement, close)
+- `.github/agents/beads-pm.agent.md` — VS Code planning agent
+- `.github/agents/beads-dev.agent.md` — VS Code build agent
+- `.github/skills/` — Reusable skill definitions (beads-create, beads-triage, beads-workflow)
+- `.github/instructions/beads-conventions.instructions.md` — Always-on conventions
+- `.beads/` — Beads database (managed by bd, do not edit directly)
+
 ## Core Rule
 
 Use `bd` (beads CLI) for ALL task tracking. Never use markdown TODOs, task lists, or external issue trackers. Beads is the single source of truth.
@@ -76,13 +116,13 @@ Priorities:
 - Keep functions small and focused
 - Study existing patterns before writing new code
 
-## Project Structure
+## Rules
 
-- `specs/` — Requirement documents (one per topic)
-- `AGENTS.md` — Operational guide with build commands and patterns
-- `PROMPT_plan.md` — Planning mode instructions (specs to task graph)
-- `PROMPT_build.md` — Build mode instructions (claim, implement, close)
-- `.beads/` — Beads database (managed by bd, do not edit directly)
+- Use `bd` for ALL task tracking — never markdown TODOs
+- One task per agent invocation
+- Always run backpressure (tests/lint/build) before committing
+- Link discovered work with `discovered-from` dependencies
+- Close issues with meaningful reasons
 
 ## Important
 

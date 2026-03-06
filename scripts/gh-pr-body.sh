@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+# Generate a PR description from beads issues addressed in the current branch.
+# Reads git log to find 'Closes: <bd-id>' references, looks up those issues
+# and their GitHub counterparts, and formats a PR body.
+#
+# Usage:
+#   scripts/gh-pr-body.sh              # Compare against main
+#   scripts/gh-pr-body.sh --base dev   # Compare against dev branch
+#   scripts/gh-pr-body.sh --output pr-body.md  # Write to file
+#
+# Requires: bd, python3, git
+
+set -euo pipefail
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            echo "Usage: $0 [--base BRANCH] [--output FILE]"
+            echo "Generate a PR description from beads issues on the current branch."
+            exit 0
+            ;;
+    esac
+done
+
+for cmd in bd python3 git; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "Error: $cmd not found"
+        exit 1
+    fi
+done
+
+python3 - "$@" << 'PYEOF'
+import json
+import os
+import re
+import subprocess
+import sys
+from collections import defaultdict
+
+
+def parse_args(argv):
+    """Parse CLI arguments."""
+    args = {"base": "main", "output": None}
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--base" and i + 1 < len(argv):
+            args["base"] = argv[i + 1]
+            i += 2
+        elif argv[i] == "--output" and i + 1 < len(argv):
+            args["output"] = argv[i + 1]
+            i += 2
+        else:
+            i += 1
+    return args
+
+
+def run(cmd):
+    """Run a shell command and return stdout."""
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return result.stdout.strip()
+
+
+def get_branch_name():
+    """Get current branch name."""
+    return run("git rev-parse --abbrev-ref HEAD")
+
+
+def get_commit_messages(base):
+    """Get commit messages from base..HEAD."""
+    return run(f'git log --format="%H %s%n%b---" {base}..HEAD')
+
+
+def extract_beads_ids(commit_text):
+    """Extract beads IDs from 'Closes: <id>' lines in commit messages."""
+    return list(dict.fromkeys(re.findall(r"Closes:\s+([\w-]+\.?\w*)", commit_text)))
+
+
+def extract_gh_closes(commit_text):
+    """Extract GitHub issue numbers from 'Closes #N' lines."""
+    return list(dict.fromkeys(re.findall(r"Closes\s+#(\d+)", commit_text)))
+
+
+def get_commit_subjects(base):
+    """Get commit subject lines."""
+    raw = run(f'git log --format="%s" {base}..HEAD')
+    return [line for line in raw.splitlines() if line.strip()] if raw else []
+
+
+def lookup_beads_issue(beads_id):
+    """Look up a beads issue by ID."""
+    raw = run(f"bd show {beads_id} --json 2>/dev/null")
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list) and data:
+            return data[0]
+        if isinstance(data, dict):
+            return data
+    except json.JSONDecodeError:
+        pass
+    return None
+
+
+def get_repo_url():
+    """Get the GitHub repo URL for linking."""
+    remote = run("git remote get-url origin 2>/dev/null")
+    if not remote:
+        return None
+    remote = remote.rstrip("/").removesuffix(".git")
+    if remote.startswith("git@"):
+        remote = remote.replace(":", "/").replace("git@", "https://")
+    return remote
+
+
+def type_label(t):
+    """Human-readable type."""
+    return {"bug": "Bug fix", "feature": "Feature", "task": "Task",
+            "chore": "Chore", "epic": "Epic"}.get(t, t)
+
+
+def format_pr_body(beads_ids, commit_subjects, base, repo_url=None):
+    """Format a PR description from beads issues."""
+    lines = []
+
+    # Look up all issues
+    issues = []
+    for bid in beads_ids:
+        issue = lookup_beads_issue(bid)
+        if issue:
+            issues.append(issue)
+
+    # Summary section
+    lines.append("## Summary")
+    lines.append("")
+
+    if issues:
+        # Group by type for summary bullets
+        by_type = defaultdict(list)
+        for issue in issues:
+            itype = issue.get("issue_type", "task")
+            by_type[itype].append(issue)
+
+        for itype in ["feature", "bug", "task", "chore"]:
+            if itype not in by_type:
+                continue
+            for issue in by_type[itype]:
+                title = issue["title"]
+                lines.append(f"- **{type_label(itype)}:** {title}")
+    else:
+        # Fallback to commit subjects
+        for subject in commit_subjects[:10]:
+            lines.append(f"- {subject}")
+
+    lines.append("")
+
+    # Linked issues section
+    if issues:
+        lines.append("## Linked Issues")
+        lines.append("")
+        lines.append("| Beads ID | GitHub | Type | Status |")
+        lines.append("|----------|--------|------|--------|")
+        for issue in issues:
+            bid = issue["id"]
+            itype = issue.get("issue_type", "task")
+            status = issue.get("status", "open")
+            gh_ref = issue.get("external_ref", "")
+            gh_link = ""
+            if gh_ref and gh_ref.startswith("gh-"):
+                gh_num = gh_ref[3:]
+                if repo_url:
+                    gh_link = f"[#{gh_num}]({repo_url}/issues/{gh_num})"
+                else:
+                    gh_link = f"#{gh_num}"
+            lines.append(f"| `{bid}` | {gh_link} | {itype} | {status} |")
+        lines.append("")
+
+    # Commits section
+    if commit_subjects:
+        lines.append("## Commits")
+        lines.append("")
+        for subject in commit_subjects:
+            lines.append(f"- {subject}")
+        lines.append("")
+
+    # Test plan section
+    lines.append("## Test plan")
+    lines.append("")
+    lines.append("- [ ] Review linked issues for acceptance criteria")
+    lines.append("- [ ] Verify all quality gates pass (`pytest`, `mypy`, `ruff`)")
+    lines.append("- [ ] Check `bd ready --json` for unblocked follow-up work")
+    lines.append("")
+
+    # Footer
+    branch = get_branch_name()
+    lines.append("---")
+    lines.append(f"*Generated from `{base}..{branch}` by `scripts/gh-pr-body.sh`*")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def main():
+    args = parse_args(sys.argv[1:])
+    base = args["base"]
+
+    # Check that base exists
+    check = run(f"git rev-parse --verify {base} 2>/dev/null")
+    if not check:
+        print(f"Error: base branch '{base}' not found", file=sys.stderr)
+        sys.exit(1)
+
+    commit_text = get_commit_messages(base)
+    if not commit_text:
+        print(f"No commits found between {base} and HEAD.", file=sys.stderr)
+        sys.exit(1)
+
+    beads_ids = extract_beads_ids(commit_text)
+    commit_subjects = get_commit_subjects(base)
+
+    repo_url = get_repo_url()
+    body = format_pr_body(beads_ids, commit_subjects, base, repo_url)
+
+    if args["output"]:
+        with open(args["output"], "w") as f:
+            f.write(body)
+        print(f"Wrote PR body to {args['output']} ({len(beads_ids)} beads issues, {len(commit_subjects)} commits)")
+    else:
+        print(body)
+
+
+if __name__ == "__main__":
+    main()
+PYEOF

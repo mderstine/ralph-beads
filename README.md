@@ -384,6 +384,22 @@ The Ralph Loop (`while :; do claude -p; done`) becomes **repeated agent invocati
 4. Repeat step 3 until bd ready returns empty
 ```
 
+### File Convention Mapping
+
+Every Claude Code convention file has a VS Code Copilot equivalent:
+
+| Claude Code | VS Code Copilot | Purpose |
+|-------------|-----------------|---------|
+| `CLAUDE.md` | `.github/copilot-instructions.md` | IDE-wide project instructions, injected into every session |
+| `AGENTS.md` | `.github/instructions/beads-conventions.instructions.md` | Always-on conventions: bd CLI, commit format, coding standards |
+| `PROMPT_plan.md` | `.github/agents/beads-pm.agent.md` | Planning agent: specs → dependency-aware task graph |
+| `PROMPT_build.md` | `.github/agents/beads-dev.agent.md` | Build agent: claim → implement → validate → commit → close |
+| `.claude/commands/*.md` | `.github/prompts/*.prompt.md` | Slash command / prompt file definitions |
+| `.claude/skills/` | `.github/skills/*/SKILL.md` | Reusable skill definitions |
+
+The dual-file structure lets the framework run identically from both IDEs. `bd` is the
+shared state layer — it doesn't care which IDE invoked the agent.
+
 ### Instruction Files
 
 `.github/instructions/beads-conventions.instructions.md` is auto-applied to all

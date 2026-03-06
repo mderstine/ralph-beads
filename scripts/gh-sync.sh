@@ -162,7 +162,7 @@ def build_dependency_maps(beads_issues):
     return ext_ref_map, blocked_by_map, blocks_map
 
 
-def format_gh_body(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None):
+def format_gh_body(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, children_map=None):
     """Format a GitHub issue body from a beads issue."""
     parts = []
 
@@ -170,8 +170,26 @@ def format_gh_body(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None
     if desc:
         parts.append(desc)
 
-    # Add dependency references
+    # Add subtask tasklist for epic issues
     beads_id = issue["id"]
+    if children_map and beads_id in children_map:
+        task_lines = []
+        for child in children_map[beads_id]:
+            child_id = child["id"]
+            child_title = child["title"]
+            is_done = child.get("status") == "closed"
+            checkbox = "[x]" if is_done else "[ ]"
+            gh_num = ext_ref_map.get(child_id) if ext_ref_map else None
+            if gh_num:
+                task_lines.append(f"- {checkbox} #{gh_num}")
+            else:
+                task_lines.append(f"- {checkbox} {child_title} (`{child_id}`)")
+        if task_lines:
+            parts.append("")
+            parts.append("### Subtasks")
+            parts.extend(task_lines)
+
+    # Add dependency references
     dep_lines = []
 
     if blocked_by_map and beads_id in blocked_by_map:
@@ -227,10 +245,10 @@ def get_external_ref(issue):
     return None
 
 
-def create_gh_issue(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None):
+def create_gh_issue(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None, children_map=None):
     """Create a new GitHub issue and return the issue number."""
     title = issue["title"]
-    body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map)
+    body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map, children_map)
     labels = beads_to_labels(issue, epic_titles=epic_titles)
     label_args = ",".join(labels)
 
@@ -260,11 +278,11 @@ def create_gh_issue(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=Non
     return gh_num
 
 
-def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None):
+def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None, children_map=None):
     """Update an existing GitHub issue if it differs from beads state."""
     changes = []
     title = issue["title"]
-    body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map)
+    body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map, children_map)
     target_state = beads_to_gh_state(issue)
     target_labels = set(beads_to_labels(issue, epic_titles=epic_titles))
 
@@ -353,9 +371,16 @@ def main():
         if i.get("issue_type") == "epic"
     }
 
+    # Build children map (epic_id → [child issues]) for subtask tasklists
+    children_map = {}
+    for issue in beads_issues:
+        parent = issue.get("parent", "")
+        if parent:
+            children_map.setdefault(parent, []).append(issue)
+
     # Build dependency cross-reference maps
     ext_ref_map, blocked_by_map, blocks_map = build_dependency_maps(beads_issues)
-    dep_args = dict(ext_ref_map=ext_ref_map, blocked_by_map=blocked_by_map, blocks_map=blocks_map, epic_titles=epic_titles)
+    dep_args = dict(ext_ref_map=ext_ref_map, blocked_by_map=blocked_by_map, blocks_map=blocks_map, epic_titles=epic_titles, children_map=children_map)
 
     print(f"Found {len(beads_issues)} beads issue(s), {len(gh_issues)} GitHub issue(s)")
     print("")

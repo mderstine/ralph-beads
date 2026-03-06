@@ -52,8 +52,8 @@ DRY_RUN = os.environ.get("DRY_RUN") == "true"
 
 
 def run(cmd, capture=True):
-    """Run a shell command and return stdout."""
-    result = subprocess.run(cmd, shell=True, capture_output=capture, text=True)
+    """Run a command (list of args) and return stdout."""
+    result = subprocess.run(cmd, capture_output=capture, text=True)
     if result.returncode != 0 and capture:
         print(f"  ERROR: {cmd}", file=sys.stderr)
         print(f"  {result.stderr.strip()}", file=sys.stderr)
@@ -65,7 +65,7 @@ def get_beads_issues():
     # Include all statuses so we can close GH issues when beads issues close
     all_issues = []
     for status in ("open", "in_progress", "closed"):
-        raw = run(f"bd list --status {status} --json")
+        raw = run(["bd", "list", "--status", status, "--json"])
         if raw:
             all_issues.extend(json.loads(raw))
     return all_issues
@@ -73,7 +73,8 @@ def get_beads_issues():
 
 def get_gh_issues():
     """Get all GitHub issues (open and closed) as a dict keyed by number."""
-    raw = run('gh issue list --state all --limit 1000 --json number,title,state,labels,body')
+    raw = run(['gh', 'issue', 'list', '--state', 'all', '--limit', '1000',
+               '--json', 'number,title,state,labels,body'])
     if not raw:
         return {}
     issues = json.loads(raw)
@@ -286,9 +287,9 @@ def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=No
     # Handle state changes separately
     if current_state != target_state:
         if target_state == "closed":
-            run(f"gh issue close {gh_num}")
+            run(["gh", "issue", "close", str(gh_num)])
         else:
-            run(f"gh issue reopen {gh_num}")
+            run(["gh", "issue", "reopen", str(gh_num)])
 
     print(f"  updated: {issue['id']} → #{gh_num} ({', '.join(changes)})")
 
@@ -297,7 +298,7 @@ def store_external_ref(beads_id, gh_num):
     """Store the GitHub issue number on the beads issue."""
     if DRY_RUN:
         return
-    run(f'bd update {beads_id} --external-ref "gh-{gh_num}" --json')
+    run(["bd", "update", beads_id, "--external-ref", f"gh-{gh_num}", "--json"])
 
 
 def main():

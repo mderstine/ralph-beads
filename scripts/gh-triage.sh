@@ -53,8 +53,8 @@ DRY_RUN = os.environ.get("DRY_RUN") == "true"
 
 
 def run(cmd, capture=True):
-    """Run a shell command and return stdout."""
-    result = subprocess.run(cmd, shell=True, capture_output=capture, text=True)
+    """Run a command (list of args) and return stdout."""
+    result = subprocess.run(cmd, capture_output=capture, text=True)
     if result.returncode != 0 and capture:
         print(f"  ERROR: {cmd}", file=sys.stderr)
         print(f"  {result.stderr.strip()}", file=sys.stderr)
@@ -63,10 +63,10 @@ def run(cmd, capture=True):
 
 def get_spec_candidates():
     """Get GitHub Issues labeled spec-candidate that don't have spec-created."""
-    raw = run(
-        'gh issue list --label spec-candidate --state open --limit 100 '
-        '--json number,title,body,labels'
-    )
+    raw = run([
+        'gh', 'issue', 'list', '--label', 'spec-candidate', '--state', 'open',
+        '--limit', '100', '--json', 'number,title,body,labels'
+    ])
     if not raw:
         return []
     issues = json.loads(raw)
@@ -238,10 +238,10 @@ def main():
             f"(../blob/main/{spec_path})\n\n"
             f"Run `./loop.sh plan` to decompose this spec into tasks."
         )
-        run(f'gh issue comment {number} --body "{comment}"')
+        run(['gh', 'issue', 'comment', str(number), '--body', comment])
 
         # Add spec-created label
-        run(f'gh issue edit {number} --add-label spec-created')
+        run(['gh', 'issue', 'edit', str(number), '--add-label', 'spec-created'])
 
         print(f"  created: #{number} \"{title}\" → {spec_path}")
         created += 1

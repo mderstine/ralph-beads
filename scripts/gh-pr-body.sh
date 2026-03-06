@@ -55,19 +55,19 @@ def parse_args(argv):
 
 
 def run(cmd):
-    """Run a shell command and return stdout."""
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    """Run a command (list of args) and return stdout."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
     return result.stdout.strip()
 
 
 def get_branch_name():
     """Get current branch name."""
-    return run("git rev-parse --abbrev-ref HEAD")
+    return run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
 
 
 def get_commit_messages(base):
     """Get commit messages from base..HEAD."""
-    return run(f'git log --format="%H %s%n%b---" {base}..HEAD')
+    return run(["git", "log", "--format=%H %s%n%b---", f"{base}..HEAD"])
 
 
 def extract_beads_ids(commit_text):
@@ -82,13 +82,13 @@ def extract_gh_closes(commit_text):
 
 def get_commit_subjects(base):
     """Get commit subject lines."""
-    raw = run(f'git log --format="%s" {base}..HEAD')
+    raw = run(["git", "log", "--format=%s", f"{base}..HEAD"])
     return [line for line in raw.splitlines() if line.strip()] if raw else []
 
 
 def lookup_beads_issue(beads_id):
     """Look up a beads issue by ID."""
-    raw = run(f"bd show {beads_id} --json 2>/dev/null")
+    raw = run(["bd", "show", beads_id, "--json"])
     if not raw:
         return None
     try:
@@ -104,7 +104,7 @@ def lookup_beads_issue(beads_id):
 
 def get_repo_url():
     """Get the GitHub repo URL for linking."""
-    remote = run("git remote get-url origin 2>/dev/null")
+    remote = run(["git", "remote", "get-url", "origin"])
     if not remote:
         return None
     remote = remote.rstrip("/").removesuffix(".git")
@@ -205,7 +205,7 @@ def main():
     base = args["base"]
 
     # Check that base exists
-    check = run(f"git rev-parse --verify {base} 2>/dev/null")
+    check = run(["git", "rev-parse", "--verify", base])
     if not check:
         print(f"Error: base branch '{base}' not found", file=sys.stderr)
         sys.exit(1)

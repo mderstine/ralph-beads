@@ -58,8 +58,8 @@ def parse_args(argv):
 
 
 def run(cmd):
-    """Run a shell command and return stdout."""
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    """Run a command (list of args) and return stdout."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"  ERROR: {cmd}", file=sys.stderr)
         print(f"  {result.stderr.strip()}", file=sys.stderr)
@@ -68,7 +68,7 @@ def run(cmd):
 
 def get_closed_issues(since=None):
     """Get all closed beads issues, optionally filtered by date."""
-    raw = run("bd list --status closed --json")
+    raw = run(["bd", "list", "--status", "closed", "--json"])
     if not raw:
         return []
     issues = json.loads(raw)
@@ -79,13 +79,13 @@ def get_closed_issues(since=None):
 
 def get_commit_for_issue(beads_id):
     """Find the commit SHA that closed a beads issue."""
-    result = run(f'git log --format="%H" --grep="Closes: {beads_id}" -1')
+    result = run(["git", "log", "--format=%H", f"--grep=Closes: {beads_id}", "-1"])
     return result[:12] if result else None
 
 
 def get_repo_url():
     """Get the GitHub repo URL for linking."""
-    remote = run("git remote get-url origin 2>/dev/null")
+    remote = run(["git", "remote", "get-url", "origin"])
     if not remote:
         return None
     # Convert git@github.com:user/repo.git or https://github.com/user/repo.git
@@ -135,7 +135,7 @@ def format_changelog(issues, repo_url=None):
     # Resolve epic titles for parents we haven't seen as closed
     for epic_id in by_epic:
         if epic_id not in epic_titles:
-            raw = run(f"bd show {epic_id} --json 2>/dev/null")
+            raw = run(["bd", "show", epic_id, "--json"])
             if raw:
                 try:
                     epic_data = json.loads(raw)

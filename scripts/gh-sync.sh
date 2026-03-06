@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+# Sync beads issues to GitHub Issues (outbound).
+# Beads is source of truth for task state. GitHub is the public mirror.
+#
+# Usage:
+#   scripts/gh-sync.sh              # Sync all beads issues to GitHub
+#   scripts/gh-sync.sh --dry-run    # Preview without making changes
+#
+# Requires: gh (authenticated), bd, python3
+
+set -euo pipefail
+
+DRY_RUN=false
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=true ;;
+        -h|--help)
+            echo "Usage: $0 [--dry-run]"
+            echo "Sync beads issues to GitHub Issues."
+            exit 0
+            ;;
+    esac
+done
+
+# Verify prerequisites
+for cmd in gh bd python3; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "Error: $cmd not found"
+        exit 1
+    fi
+done
+
+if ! gh auth status &>/dev/null; then
+    echo "Error: gh CLI not authenticated. Run: gh auth login"
+    exit 1
+fi
+
+echo "=== Beads → GitHub Sync ==="
+$DRY_RUN && echo "(dry-run mode)"
+echo ""
+
+# Export for python
+export DRY_RUN
+
+python3 - "$@" << 'PYEOF'
+import json
+import os
+import subprocess
+import sys
+
+DRY_RUN = os.environ.get("DRY_RUN") == "true"
+
+
+def run(cmd, capture=True):
+    """Run a shell command and return stdout."""
+    result = subprocess.run(cmd, shell=True, capture_output=capture, text=True)
+    if result.returncode != 0 and capture:
+        print(f"  ERROR: {cmd}", file=sys.stderr)
+        print(f"  {result.stderr.strip()}", file=sys.stderr)
+    return result.stdout.strip() if capture else ""
+
+
+def get_beads_issues():
+    """Get all beads issues (open + closed) as a list of dicts."""
+    # Include all statuses so we can close GH issues when beads issues close
+    all_issues = []
+    for status in ("open", "in_progress", "closed"):
+        raw = run(f"bd list --status {status} --json")
+        if raw:
+            all_issues.extend(json.loads(raw))
+    return all_issues
+
+
+def get_gh_issues():
+    """Get all GitHub issues (open and closed) as a dict keyed by number."""
+    raw = run('gh issue list --state all --limit 1000 --json number,title,state,labels,body')
+    if not raw:
+        return {}
+    issues = json.loads(raw)
+    return {i["number"]: i for i in issues}
+
+
+def beads_to_labels(issue):
+    """Convert beads issue type and priority to GitHub label names."""
+    labels = []
+    itype = issue.get("issue_type", "")
+    if itype:
+        labels.append(f"type:{itype}")
+    priority = issue.get("priority")
+    if priority is not None:
+        labels.append(f"priority:{priority}")
+    status = issue.get("status", "")
+    # Add blocked label if issue has unresolved dependencies
+    dep_count = issue.get("dependency_count", 0)
+    if dep_count > 0 and status == "open":
+        labels.append("blocked")
+    return labels
+
+
+def beads_to_gh_state(issue):
+    """Map beads status to GitHub issue state."""
+    status = issue.get("status", "open")
+    if status == "closed":
+        return "closed"
+    return "open"
+
+
+def format_gh_body(issue):
+    """Format a GitHub issue body from a beads issue."""
+    parts = []
+
+    desc = issue.get("description", "")
+    if desc:
+        parts.append(desc)
+
+    parts.append("")
+    parts.append("---")
+    parts.append(f"**Beads ID:** `{issue['id']}`")
+
+    parent = issue.get("parent", "")
+    if parent:
+        parts.append(f"**Epic:** `{parent}`")
+
+    status = issue.get("status", "open")
+    parts.append(f"**Status:** {status}")
+
+    assignee = issue.get("assignee", "")
+    if assignee:
+        parts.append(f"**Assignee:** {assignee}")
+
+    parts.append("")
+    parts.append("*Synced from [beads](https://github.com/steveyegge/beads) issue tracker*")
+
+    return "\n".join(parts)
+
+
+def get_external_ref(issue):
+    """Extract GitHub issue number from external_ref field (format: 'gh-N')."""
+    ref = issue.get("external_ref", "")
+    if ref and ref.startswith("gh-"):
+        try:
+            return int(ref[3:])
+        except ValueError:
+            pass
+    return None
+
+
+def create_gh_issue(issue):
+    """Create a new GitHub issue and return the issue number."""
+    title = issue["title"]
+    body = format_gh_body(issue)
+    labels = beads_to_labels(issue)
+    label_args = ",".join(labels)
+
+    if DRY_RUN:
+        print(f"  would create: #{issue['id']} → GH issue \"{title}\" [{label_args}]")
+        return None
+
+    # Use gh issue create
+    cmd_parts = ["gh", "issue", "create", "--title", title, "--body", body]
+    if label_args:
+        cmd_parts.extend(["--label", label_args])
+
+    result = subprocess.run(cmd_parts, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  ERROR creating GH issue for {issue['id']}: {result.stderr.strip()}")
+        return None
+
+    # Parse the URL to get the issue number
+    url = result.stdout.strip()
+    try:
+        gh_num = int(url.rstrip("/").split("/")[-1])
+    except (ValueError, IndexError):
+        print(f"  ERROR: could not parse issue number from: {url}")
+        return None
+
+    print(f"  created: {issue['id']} → #{gh_num} \"{title}\"")
+    return gh_num
+
+
+def update_gh_issue(gh_num, issue, gh_issue):
+    """Update an existing GitHub issue if it differs from beads state."""
+    changes = []
+    title = issue["title"]
+    body = format_gh_body(issue)
+    target_state = beads_to_gh_state(issue)
+    target_labels = set(beads_to_labels(issue))
+
+    # Check title
+    if gh_issue.get("title") != title:
+        changes.append("title")
+
+    # Check state
+    current_state = "open" if gh_issue.get("state") == "OPEN" else "closed"
+    if current_state != target_state:
+        changes.append(f"state:{current_state}→{target_state}")
+
+    # Check labels (only beads-managed labels)
+    current_labels = {l["name"] for l in gh_issue.get("labels", [])}
+    beads_label_prefixes = ("type:", "priority:", "blocked", "spec-candidate", "spec-created")
+    current_beads_labels = {l for l in current_labels if any(l.startswith(p) or l == p for p in beads_label_prefixes)}
+    if current_beads_labels != target_labels:
+        changes.append("labels")
+
+    if not changes:
+        print(f"  unchanged: {issue['id']} → #{gh_num}")
+        return
+
+    if DRY_RUN:
+        print(f"  would update: #{gh_num} ({', '.join(changes)})")
+        return
+
+    # Build update command
+    cmd_parts = ["gh", "issue", "edit", str(gh_num), "--title", title, "--body", body]
+
+    # Manage labels: remove old beads labels, add new ones
+    for old_label in current_beads_labels - target_labels:
+        cmd_parts.extend(["--remove-label", old_label])
+    for new_label in target_labels - current_beads_labels:
+        cmd_parts.extend(["--add-label", new_label])
+
+    result = subprocess.run(cmd_parts, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  ERROR updating #{gh_num}: {result.stderr.strip()}")
+        return
+
+    # Handle state changes separately
+    if current_state != target_state:
+        if target_state == "closed":
+            run(f"gh issue close {gh_num}")
+        else:
+            run(f"gh issue reopen {gh_num}")
+
+    print(f"  updated: {issue['id']} → #{gh_num} ({', '.join(changes)})")
+
+
+def store_external_ref(beads_id, gh_num):
+    """Store the GitHub issue number on the beads issue."""
+    if DRY_RUN:
+        return
+    run(f'bd update {beads_id} --external-ref "gh-{gh_num}" --json')
+
+
+def main():
+    beads_issues = get_beads_issues()
+    gh_issues = get_gh_issues()
+
+    if not beads_issues:
+        print("No beads issues found.")
+        return
+
+    print(f"Found {len(beads_issues)} beads issue(s), {len(gh_issues)} GitHub issue(s)")
+    print("")
+
+    created = 0
+    updated = 0
+    skipped = 0
+
+    for issue in beads_issues:
+        gh_num = get_external_ref(issue)
+        is_closed = issue.get("status") == "closed"
+
+        if gh_num and gh_num in gh_issues:
+            # Existing linked issue — update if needed
+            update_gh_issue(gh_num, issue, gh_issues[gh_num])
+            updated += 1
+        elif gh_num and gh_num not in gh_issues:
+            # Stale reference — issue was deleted on GitHub, recreate
+            print(f"  stale ref: {issue['id']} → #{gh_num} (not found on GitHub)")
+            new_num = create_gh_issue(issue)
+            if new_num:
+                store_external_ref(issue["id"], new_num)
+                created += 1
+        elif not gh_num and is_closed:
+            # Skip closed issues that were never synced (historical)
+            skipped += 1
+        else:
+            # No external ref — create new GitHub issue
+            new_num = create_gh_issue(issue)
+            if new_num:
+                store_external_ref(issue["id"], new_num)
+                created += 1
+            else:
+                skipped += 1
+
+    print("")
+    print(f"Summary: {created} created, {updated} updated, {skipped} skipped")
+
+
+if __name__ == "__main__":
+    main()
+PYEOF

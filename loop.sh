@@ -8,6 +8,7 @@
 #   ./loop.sh plan 5       # Planning mode, max 5 iterations
 #   ./loop.sh sync         # Sync beads issues to GitHub (single-shot)
 #   ./loop.sh triage       # Triage spec-candidate GitHub Issues (single-shot)
+#   ./loop.sh changelog    # Generate changelog from closed issues (single-shot)
 
 set -euo pipefail
 
@@ -22,6 +23,7 @@ for arg in "$@"; do
         plan) MODE="plan" ;;
         sync) MODE="sync" ;;
         triage) MODE="triage" ;;
+        changelog) MODE="changelog" ;;
         --dry-run) PASSTHROUGH_ARGS+=("$arg") ;;
         *[0-9]*) MAX_ITERATIONS="$arg" ;;
     esac
@@ -36,6 +38,10 @@ case "$MODE" in
     triage)
         echo "=== Ralph-Beads: Issue Triage ==="
         exec scripts/gh-triage.sh "${PASSTHROUGH_ARGS[@]}"
+        ;;
+    changelog)
+        echo "=== Ralph-Beads: Changelog ==="
+        exec scripts/gh-changelog.sh "${PASSTHROUGH_ARGS[@]}"
         ;;
 esac
 

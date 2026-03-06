@@ -81,6 +81,12 @@ def get_gh_issues():
     return {i["number"]: i for i in issues}
 
 
+def get_commit_for_issue(beads_id):
+    """Find the commit SHA that closed a beads issue."""
+    result = run(["git", "log", "--format=%H", f"--grep=Closes: {beads_id}", "-1"])
+    return result[:12] if result else None
+
+
 def beads_to_labels(issue):
     """Convert beads issue type and priority to GitHub label names."""
     labels = []
@@ -267,7 +273,10 @@ def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=No
         return
 
     if DRY_RUN:
-        print(f"  would update: #{gh_num} ({', '.join(changes)})")
+        change_desc = ', '.join(changes)
+        if target_state == "closed":
+            change_desc += " +closing-comment"
+        print(f"  would update: #{gh_num} ({change_desc})")
         return
 
     # Build update command
@@ -287,6 +296,18 @@ def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=No
     # Handle state changes separately
     if current_state != target_state:
         if target_state == "closed":
+            # Post closing comment with commit SHA and close reason
+            beads_id = issue["id"]
+            close_reason = issue.get("close_reason", "")
+            sha = get_commit_for_issue(beads_id)
+            comment_parts = []
+            if sha:
+                comment_parts.append(f"Implemented in {sha}.")
+            if close_reason:
+                comment_parts.append(close_reason)
+            if comment_parts:
+                comment = "\n\n".join(comment_parts)
+                run(["gh", "issue", "comment", str(gh_num), "--body", comment])
             run(["gh", "issue", "close", str(gh_num)])
         else:
             run(["gh", "issue", "reopen", str(gh_num)])

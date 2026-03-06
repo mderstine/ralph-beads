@@ -1,0 +1,34 @@
+name: Setup Beads
+description: Install the bd (beads) CLI and verify the beads database is accessible
+
+inputs:
+  bd-version:
+    description: Version of @beads/bd to install (default latest)
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - name: Install bd CLI
+      shell: bash
+      run: |
+        echo "::group::Install @beads/bd"
+        npm install -g "@beads/bd@${{ inputs.bd-version }}"
+        echo "::endgroup::"
+        echo "bd $(bd --version)"
+
+    - name: Verify .beads/ directory
+      shell: bash
+      run: |
+        if [ ! -d ".beads" ]; then
+          echo "::error::.beads/ directory not found. Is this a beads-enabled repository?"
+          exit 1
+        fi
+        echo ".beads/ directory found"
+
+    - name: Run bd prime
+      shell: bash
+      run: |
+        bd prime
+        echo "Beads database initialized successfully"

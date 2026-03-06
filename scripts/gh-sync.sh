@@ -105,13 +105,72 @@ def beads_to_gh_state(issue):
     return "open"
 
 
-def format_gh_body(issue):
+def build_dependency_maps(beads_issues):
+    """Build maps for dependency references.
+    Returns (ext_ref_map, blocked_by_map, blocks_map) where:
+    - ext_ref_map: beads_id → gh_issue_number
+    - blocked_by_map: beads_id → [beads_ids that block it]
+    - blocks_map: beads_id → [beads_ids it blocks]
+    """
+    ext_ref_map = {}
+    blocked_by_map = {}
+    blocks_map = {}
+
+    for issue in beads_issues:
+        beads_id = issue["id"]
+        ref = issue.get("external_ref", "")
+        if ref and ref.startswith("gh-"):
+            try:
+                ext_ref_map[beads_id] = int(ref[3:])
+            except ValueError:
+                pass
+
+    for issue in beads_issues:
+        beads_id = issue["id"]
+        for dep in issue.get("dependencies", []):
+            dep_type = dep.get("type", "")
+            dep_id = dep.get("depends_on_id", "")
+            if dep_type == "blocks" and dep_id:
+                # This issue is blocked by dep_id
+                blocked_by_map.setdefault(beads_id, []).append(dep_id)
+                # dep_id blocks this issue
+                blocks_map.setdefault(dep_id, []).append(beads_id)
+
+    return ext_ref_map, blocked_by_map, blocks_map
+
+
+def format_gh_body(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None):
     """Format a GitHub issue body from a beads issue."""
     parts = []
 
     desc = issue.get("description", "")
     if desc:
         parts.append(desc)
+
+    # Add dependency references
+    beads_id = issue["id"]
+    dep_lines = []
+
+    if blocked_by_map and beads_id in blocked_by_map:
+        for blocker_id in blocked_by_map[beads_id]:
+            gh_num = ext_ref_map.get(blocker_id) if ext_ref_map else None
+            if gh_num:
+                dep_lines.append(f"- Blocked by #{gh_num} (`{blocker_id}`)")
+            else:
+                dep_lines.append(f"- Blocked by `{blocker_id}`")
+
+    if blocks_map and beads_id in blocks_map:
+        for blocked_id in blocks_map[beads_id]:
+            gh_num = ext_ref_map.get(blocked_id) if ext_ref_map else None
+            if gh_num:
+                dep_lines.append(f"- Blocks #{gh_num} (`{blocked_id}`)")
+            else:
+                dep_lines.append(f"- Blocks `{blocked_id}`")
+
+    if dep_lines:
+        parts.append("")
+        parts.append("### Dependencies")
+        parts.extend(dep_lines)
 
     parts.append("")
     parts.append("---")
@@ -145,10 +204,10 @@ def get_external_ref(issue):
     return None
 
 
-def create_gh_issue(issue):
+def create_gh_issue(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None):
     """Create a new GitHub issue and return the issue number."""
     title = issue["title"]
-    body = format_gh_body(issue)
+    body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map)
     labels = beads_to_labels(issue)
     label_args = ",".join(labels)
 
@@ -178,11 +237,11 @@ def create_gh_issue(issue):
     return gh_num
 
 
-def update_gh_issue(gh_num, issue, gh_issue):
+def update_gh_issue(gh_num, issue, gh_issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None):
     """Update an existing GitHub issue if it differs from beads state."""
     changes = []
     title = issue["title"]
-    body = format_gh_body(issue)
+    body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map)
     target_state = beads_to_gh_state(issue)
     target_labels = set(beads_to_labels(issue))
 
@@ -249,6 +308,10 @@ def main():
         print("No beads issues found.")
         return
 
+    # Build dependency cross-reference maps
+    ext_ref_map, blocked_by_map, blocks_map = build_dependency_maps(beads_issues)
+    dep_args = dict(ext_ref_map=ext_ref_map, blocked_by_map=blocked_by_map, blocks_map=blocks_map)
+
     print(f"Found {len(beads_issues)} beads issue(s), {len(gh_issues)} GitHub issue(s)")
     print("")
 
@@ -262,12 +325,12 @@ def main():
 
         if gh_num and gh_num in gh_issues:
             # Existing linked issue — update if needed
-            update_gh_issue(gh_num, issue, gh_issues[gh_num])
+            update_gh_issue(gh_num, issue, gh_issues[gh_num], **dep_args)
             updated += 1
         elif gh_num and gh_num not in gh_issues:
             # Stale reference — issue was deleted on GitHub, recreate
             print(f"  stale ref: {issue['id']} → #{gh_num} (not found on GitHub)")
-            new_num = create_gh_issue(issue)
+            new_num = create_gh_issue(issue, **dep_args)
             if new_num:
                 store_external_ref(issue["id"], new_num)
                 created += 1
@@ -276,7 +339,7 @@ def main():
             skipped += 1
         else:
             # No external ref — create new GitHub issue
-            new_num = create_gh_issue(issue)
+            new_num = create_gh_issue(issue, **dep_args)
             if new_num:
                 store_external_ref(issue["id"], new_num)
                 created += 1

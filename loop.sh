@@ -15,21 +15,66 @@ set -euo pipefail
 MODE="build"
 MAX_ITERATIONS=0
 ITERATION=0
+CLAUDE_PID=""           # PID of current Claude subshell; empty when idle
+SHUTDOWN_REQUESTED=false
+SIGNAL_GRACE=30         # Seconds to wait for Claude to exit before force-kill
 
-# Parse arguments
+# ─── Signal handling ──────────────────────────────────────────────────────────
+
+print_summary() {
+    echo ""
+    echo "=== Loop finished after $ITERATION iteration(s) ==="
+    bd prime 2>/dev/null || true
+}
+
+cleanup() {
+    local sig="${1:-SIGINT}"
+    SHUTDOWN_REQUESTED=true
+    echo ""
+    echo "=== Signal received ($sig). Shutting down gracefully... ==="
+
+    if [[ -n "$CLAUDE_PID" ]] && kill -0 "$CLAUDE_PID" 2>/dev/null; then
+        echo "Waiting for Claude (PID $CLAUDE_PID) to exit (grace: ${SIGNAL_GRACE}s)..."
+        # Kill the entire process group to reach all pipeline members
+        kill -TERM -- -"$CLAUDE_PID" 2>/dev/null || kill -TERM "$CLAUDE_PID" 2>/dev/null || true
+
+        local elapsed=0
+        while kill -0 "$CLAUDE_PID" 2>/dev/null && [[ $elapsed -lt $SIGNAL_GRACE ]]; do
+            sleep 1
+            elapsed=$((elapsed + 1))
+        done
+
+        if kill -0 "$CLAUDE_PID" 2>/dev/null; then
+            echo "Grace period expired. Force-killing Claude..."
+            kill -KILL -- -"$CLAUDE_PID" 2>/dev/null || kill -KILL "$CLAUDE_PID" 2>/dev/null || true
+        else
+            echo "Claude exited cleanly."
+        fi
+    fi
+
+    print_summary
+    exit 130
+}
+
+trap 'cleanup SIGINT'  INT
+trap 'cleanup SIGTERM' TERM
+
+# ─── Argument parsing ─────────────────────────────────────────────────────────
+
 PASSTHROUGH_ARGS=()
 for arg in "$@"; do
     case "$arg" in
-        plan) MODE="plan" ;;
-        sync) MODE="sync" ;;
-        triage) MODE="triage" ;;
+        plan)      MODE="plan" ;;
+        sync)      MODE="sync" ;;
+        triage)    MODE="triage" ;;
         changelog) MODE="changelog" ;;
         --dry-run) PASSTHROUGH_ARGS+=("$arg") ;;
-        *[0-9]*) MAX_ITERATIONS="$arg" ;;
+        *[0-9]*)   MAX_ITERATIONS="$arg" ;;
     esac
 done
 
-# Single-shot modes: delegate to scripts and exit
+# ─── Single-shot modes: delegate to scripts and exit ──────────────────────────
+
 case "$MODE" in
     sync)
         echo "=== Ralph-Beads: GitHub Sync ==="
@@ -64,11 +109,17 @@ echo "Prompt: $PROMPT_FILE"
 echo "Max iterations: ${MAX_ITERATIONS:-unlimited}"
 echo "========================"
 
+# ─── Main loop ────────────────────────────────────────────────────────────────
+
 while true; do
     ITERATION=$((ITERATION + 1))
 
     if [[ "$MAX_ITERATIONS" -gt 0 && "$ITERATION" -gt "$MAX_ITERATIONS" ]]; then
         echo "Reached max iterations ($MAX_ITERATIONS). Stopping."
+        break
+    fi
+
+    if [[ "$SHUTDOWN_REQUESTED" == "true" ]]; then
         break
     fi
 
@@ -86,14 +137,28 @@ while true; do
         echo "Ready work: $READY_COUNT issue(s)"
     fi
 
-    # Feed the prompt to Claude Code
-    cat "$PROMPT_FILE" | claude -p \
-        --output-format=stream-json \
-        --verbose \
-        --model opus \
-        2>&1 | tee "/tmp/ralph-beads-iter-${ITERATION}.log"
+    # Run Claude in a background subshell so we can track and signal it.
+    # Exit code is written to a temp file since PIPESTATUS isn't available after wait.
+    CLAUDE_EXITCODE_FILE=$(mktemp)
+    (
+        cat "$PROMPT_FILE" | claude -p \
+            --output-format=stream-json \
+            --verbose \
+            --model opus \
+            2>&1 | tee "/tmp/ralph-beads-iter-${ITERATION}.log"
+        echo "${PIPESTATUS[1]:-0}" > "$CLAUDE_EXITCODE_FILE"
+    ) &
+    CLAUDE_PID=$!
 
-    EXIT_CODE=${PIPESTATUS[1]:-0}
+    # Wait for Claude; interruptible by signal handler
+    wait "$CLAUDE_PID" 2>/dev/null || true
+    EXIT_CODE=$(cat "$CLAUDE_EXITCODE_FILE" 2>/dev/null || echo "1")
+    rm -f "$CLAUDE_EXITCODE_FILE"
+    CLAUDE_PID=""
+
+    if [[ "$SHUTDOWN_REQUESTED" == "true" ]]; then
+        break
+    fi
 
     if [[ "$EXIT_CODE" -ne 0 ]]; then
         echo "Claude exited with code $EXIT_CODE. Pausing for review."
@@ -104,6 +169,4 @@ while true; do
     echo "--- Iteration $ITERATION complete ---"
 done
 
-echo ""
-echo "=== Loop finished after $ITERATION iteration(s) ==="
-bd prime 2>/dev/null || true
+print_summary

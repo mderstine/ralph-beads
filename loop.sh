@@ -6,6 +6,8 @@
 #   ./loop.sh 20           # Build mode, max 20 iterations
 #   ./loop.sh plan         # Planning mode, unlimited
 #   ./loop.sh plan 5       # Planning mode, max 5 iterations
+#   ./loop.sh sync         # Sync beads issues to GitHub (single-shot)
+#   ./loop.sh triage       # Triage spec-candidate GitHub Issues (single-shot)
 
 set -euo pipefail
 
@@ -14,12 +16,28 @@ MAX_ITERATIONS=0
 ITERATION=0
 
 # Parse arguments
+PASSTHROUGH_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         plan) MODE="plan" ;;
+        sync) MODE="sync" ;;
+        triage) MODE="triage" ;;
+        --dry-run) PASSTHROUGH_ARGS+=("$arg") ;;
         *[0-9]*) MAX_ITERATIONS="$arg" ;;
     esac
 done
+
+# Single-shot modes: delegate to scripts and exit
+case "$MODE" in
+    sync)
+        echo "=== Ralph-Beads: GitHub Sync ==="
+        exec scripts/gh-sync.sh "${PASSTHROUGH_ARGS[@]}"
+        ;;
+    triage)
+        echo "=== Ralph-Beads: Issue Triage ==="
+        exec scripts/gh-triage.sh "${PASSTHROUGH_ARGS[@]}"
+        ;;
+esac
 
 PROMPT_FILE="PROMPT_${MODE}.md"
 

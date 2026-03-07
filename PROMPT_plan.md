@@ -5,7 +5,7 @@ create a dependency-aware task graph using beads (`bd`).
 
 ## Phase 0: Orient
 
-1. Study all files in `specs/` using parallel subagents to understand requirements
+1. Study all files in `specs/` to understand requirements
 2. Run `bd prime` to understand current project state
 3. Run `bd list --status open --json` to see existing work
 4. Study `AGENTS.md` for project-specific patterns and constraints

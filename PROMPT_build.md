@@ -53,8 +53,8 @@ If validation fails:
 3. Re-run validation
 4. Repeat until all checks pass
 
-Do NOT commit code that fails validation. Only use 1 subagent for running
-builds and tests to control backpressure.
+Do NOT commit code that fails validation. Run builds and tests sequentially
+to control backpressure.
 
 ## Phase 4: Discover & Link
 
@@ -122,7 +122,7 @@ gh issue comment <github-issue-number> --body "Implemented in $(git rev-parse --
 
 ## 999: Critical Guardrails
 
-- Do NOT modify `loop.sh`, `PROMPT_plan.md`, `PROMPT_build.md`, or `CLAUDE.md`
+- Do NOT modify `loop.sh`, `PROMPT_plan.md`, `PROMPT_build.md`, or agent config files
 - Do NOT delete or reorganize beads issues
 - Do NOT work on blocked issues — `bd ready` is the source of truth
 - Do NOT attempt multiple tasks — implement one, close it, exit

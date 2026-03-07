@@ -18,12 +18,20 @@ The user directs by writing specs (`specs/`), setting quality gates (`AGENTS.md`
 watching agent output. They intervene via `bd` CLI commands to re-prioritize, add blockers,
 skip tasks, or inject urgent work.
 
+## First-Time Setup
+
+New to this project? Use the `init` prompt for guided setup:
+- Open Copilot Chat and run the `init` prompt
+- Or run `./init.sh` directly in the terminal
+- This checks prerequisites, initializes beads, and configures GitHub integration
+
 ## VS Code Agent Invocations
 
 Instead of running `loop.sh`, invoke agents directly in Copilot Chat:
 
 | Goal | Invocation |
 |------|-----------|
+| Initialize project (first time) | Use the `init` prompt |
 | Convert specs to task graph | Invoke `@beads-pm` agent |
 | Implement one ready task | Invoke `@beads-dev` agent |
 | Check project status | Run `bd prime` in terminal |

@@ -1,4 +1,4 @@
-# Ralph-Beads Framework
+# Purser Framework
 
 Unified agentic AI development protocol combining Geoffrey Huntley's Ralph Loop
 with Beads (`bd`) dependency-aware issue tracking.
@@ -26,7 +26,7 @@ New to this project? Run `/init` (Claude Code slash command) to bootstrap the pr
 - Creates Python virtual environment (`uv venv` + `uv sync`)
 - Initializes the beads database
 - Sets up GitHub remote, Project board, and labels
-- Saves configuration to `.ralph-beads.yml`
+- Saves configuration to `.purser.yml`
 
 Or run `./init.sh` directly from the terminal.
 

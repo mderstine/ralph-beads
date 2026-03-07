@@ -1,4 +1,4 @@
-# Ralph-Beads
+# Purser
 
 A unified framework for autonomous AI development combining Geoffrey Huntley's
 [Ralph Loop](https://ghuntley.com/loop/) methodology with
@@ -6,7 +6,7 @@ A unified framework for autonomous AI development combining Geoffrey Huntley's
 
 ## What This Is
 
-Ralph-Beads is a protocol for letting an AI agent build your software autonomously
+Purser is a protocol for letting an AI agent build your software autonomously
 while you direct it from the outside. You write **what** you want (specs). The
 framework handles **how** to break it down, order it, and execute it — one task
 at a time, in an infinite loop, with fresh context every iteration.
@@ -81,7 +81,7 @@ flowchart TB
     review -.->|"bd update\nbd create\nbd dep add"| issues
 ```
 
-| Ralph Loop (original) | Ralph-Beads (this framework) |
+| Ralph Loop (original) | Purser (this framework) |
 |----------------------|------------------------------|
 | `IMPLEMENTATION_PLAN.md` flat list | `bd` dependency graph (DAG) |
 | LLM picks next task by reading markdown | `bd ready` returns unblocked work |
@@ -153,7 +153,7 @@ Done). Runs as part of `./loop.sh sync` after issue sync. Requires L1.
 
 ```bash
 git clone <this-repo>
-cd ralph-beads
+cd purser
 
 # Install uv (Python package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -315,7 +315,7 @@ You are the director, not the coder. Here's how you steer:
 | **Block something** | `bd dep add <task-id> <blocker-id> --type blocks` |
 | **Check what's next** | `bd ready --json` |
 | **View full state** | `bd prime` |
-| **View iteration logs** | `cat /tmp/ralph-beads-iter-<N>.log` |
+| **View iteration logs** | `cat /tmp/purser-iter-<N>.log` |
 
 ### After the Loop
 
@@ -428,7 +428,7 @@ The agent lives in the middle, squeezed into producing correct code.
 ## File Structure
 
 ```
-ralph-beads/
+purser/
 ├── loop.sh              # Ralph Loop orchestrator
 ├── PROMPT_plan.md       # Planning mode prompt
 ├── PROMPT_build.md      # Build mode prompt
@@ -484,7 +484,7 @@ files for two agents:
 - **VS Code Copilot** — uses `.github/agents/` and `.github/skills/` for agent mode
 
 If you use GitHub Copilot in VS Code, agent definitions and skills encode the
-ralph-beads workflow natively — no `loop.sh` required.
+purser workflow natively — no `loop.sh` required.
 
 ### Prerequisites
 
@@ -560,7 +560,7 @@ definitions.
 
 `.github/instructions/beads-conventions.instructions.md` is auto-applied to all
 files and encodes bd CLI conventions, commit format, and coding standards.
-`.github/copilot-instructions.md` injects the ralph-beads protocol into every
+`.github/copilot-instructions.md` injects the purser protocol into every
 Copilot chat session.
 
 ## Adapting for Your Project

@@ -1,4 +1,4 @@
-"""Prerequisite checker for Ralph-Beads framework.
+"""Prerequisite checker for Purser framework.
 
 Checks for required tools and reports missing ones with platform-specific
 install instructions. Uses only Python stdlib.

@@ -1,7 +1,7 @@
 # Project Initialization
 
 ## Job To Be Done
-Provide a cross-platform initialization routine that bootstraps a new Ralph-Beads project from the GitHub template, detects or creates a remote GitHub repository, and configures GitHub Projects integration through guided prompts or a config file.
+Provide a cross-platform initialization routine that bootstraps a new Purser project from the GitHub template, detects or creates a remote GitHub repository, and configures GitHub Projects integration through guided prompts or a config file.
 
 ## Requirements
 
@@ -19,7 +19,7 @@ Provide a cross-platform initialization routine that bootstraps a new Ralph-Bead
 - Verifies prerequisites are installed: `git`, `python3`, `gh` CLI, `bd` CLI
 - Reports missing prerequisites with install instructions per platform (macOS/Homebrew, Ubuntu/apt, Windows/winget or scoop)
 - Initializes the beads database (`bd init`) if `.beads/` doesn't exist
-- Creates the project config file (`.ralph-beads.yml`) with defaults if it doesn't exist
+- Creates the project config file (`.purser.yml`) with defaults if it doesn't exist
 
 ### GitHub Remote Detection and Creation
 - Checks `git remote -v` for a GitHub remote (origin or other named remotes)
@@ -37,7 +37,7 @@ Provide a cross-platform initialization routine that bootstraps a new Ralph-Bead
 - Stores the selected project number/ID in the project config file
 
 ### Configuration File
-- Use `.ralph-beads.yml` in the repo root as the single source of configuration
+- Use `.purser.yml` in the repo root as the single source of configuration
 - Structure:
   ```yaml
   github:
@@ -51,7 +51,7 @@ Provide a cross-platform initialization routine that bootstraps a new Ralph-Bead
   ```
 - All scripts (`gh-sync.sh`, `gh-project.sh`, `gh-triage.sh`, etc.) read from this config instead of re-detecting each run
 - The config file is `.gitignore`-safe by default (user opts in to committing it)
-- Environment variables override config file values (e.g., `RALPH_BEADS_GITHUB_AUTO_CREATE=skip`)
+- Environment variables override config file values (e.g., `PURSER_GITHUB_AUTO_CREATE=skip`)
 
 ### Template Readiness
 - When the repo is created from the GitHub template, the init routine detects it's a fresh clone (no `.beads/`, no config file) and runs full setup
@@ -68,6 +68,6 @@ Provide a cross-platform initialization routine that bootstraps a new Ralph-Bead
 ## Notes
 - This repo will become a GitHub template repository — init is the first thing a user runs after "Use this template"
 - The existing scripts already do ad-hoc detection (e.g., `gh repo view`); init centralizes and caches these results
-- Consider a `.ralph-beads.example.yml` checked into the template with commented defaults
+- Consider a `.purser.example.yml` checked into the template with commented defaults
 - The init routine should be the single entry point that replaces scattered prerequisite checks across scripts
 - Must work equally well from VS Code terminal (Copilot agent workflows) and Claude Code CLI sessions

@@ -1,7 +1,7 @@
-"""Ralph-Beads project configuration loader.
+"""Purser project configuration loader.
 
-Reads .ralph-beads.yml from the repo root and provides typed access to
-configuration values. Environment variables (RALPH_BEADS_*) override
+Reads .purser.yml from the repo root and provides typed access to
+configuration values. Environment variables (PURSER_*) override
 file values.
 
 Uses only Python stdlib — no PyYAML dependency. The YAML subset we
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 # Environment variable prefix
-_ENV_PREFIX = "RALPH_BEADS_"
+_ENV_PREFIX = "PURSER_"
 
 # Default configuration values
 DEFAULTS = {
@@ -33,12 +33,12 @@ DEFAULTS = {
 
 # Maps config keys to environment variable names
 _ENV_MAP = {
-    ("github", "remote"): "RALPH_BEADS_GITHUB_REMOTE",
-    ("github", "owner"): "RALPH_BEADS_GITHUB_OWNER",
-    ("github", "repo"): "RALPH_BEADS_GITHUB_REPO",
-    ("github", "auto_create"): "RALPH_BEADS_GITHUB_AUTO_CREATE",
-    ("github", "project_number"): "RALPH_BEADS_GITHUB_PROJECT_NUMBER",
-    ("labels", "bootstrap"): "RALPH_BEADS_LABELS_BOOTSTRAP",
+    ("github", "remote"): "PURSER_GITHUB_REMOTE",
+    ("github", "owner"): "PURSER_GITHUB_OWNER",
+    ("github", "repo"): "PURSER_GITHUB_REPO",
+    ("github", "auto_create"): "PURSER_GITHUB_AUTO_CREATE",
+    ("github", "project_number"): "PURSER_GITHUB_PROJECT_NUMBER",
+    ("labels", "bootstrap"): "PURSER_LABELS_BOOTSTRAP",
 }
 
 
@@ -125,16 +125,16 @@ def _apply_env_overrides(config: dict[str, dict[str, str]]) -> dict[str, dict[st
 
 
 def config_path(repo_root: Path | None = None) -> Path:
-    """Return the path to .ralph-beads.yml."""
+    """Return the path to .purser.yml."""
     root = repo_root or _find_repo_root()
-    return root / ".ralph-beads.yml"
+    return root / ".purser.yml"
 
 
 def load_config(repo_root: Path | None = None) -> dict[str, dict[str, str]]:
-    """Load configuration from .ralph-beads.yml with env var overrides.
+    """Load configuration from .purser.yml with env var overrides.
 
     Returns a two-level dict. Missing sections/keys are filled from DEFAULTS.
-    Environment variables (RALPH_BEADS_*) override file and default values.
+    Environment variables (PURSER_*) override file and default values.
     Returns defaults if no config file exists.
     """
     import copy
@@ -155,7 +155,7 @@ def load_config(repo_root: Path | None = None) -> dict[str, dict[str, str]]:
 
 
 def save_config(config: dict[str, dict[str, str]], repo_root: Path | None = None) -> Path:
-    """Write configuration to .ralph-beads.yml.
+    """Write configuration to .purser.yml.
 
     Returns the path written to.
     """

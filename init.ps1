@@ -1,6 +1,6 @@
-# Ralph-Beads Project Initialization (Windows PowerShell)
+# Purser Project Initialization (Windows PowerShell)
 #
-# Bootstraps a new Ralph-Beads project from the GitHub template.
+# Bootstraps a new Purser project from the GitHub template.
 # Idempotent - safe to re-run; skips completed steps.
 #
 # Usage:
@@ -14,7 +14,7 @@
 #   3. Detect/create GitHub remote
 #   4. Detect/setup GitHub Project
 #   5. Bootstrap GitHub labels
-#   6. Save configuration to .ralph-beads.yml
+#   6. Save configuration to .purser.yml
 #   7. Print summary and next steps
 
 [CmdletBinding()]
@@ -28,7 +28,7 @@ $ErrorActionPreference = "Continue"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ScriptsDir = Join-Path $ScriptDir "scripts"
-$ConfigFile = Join-Path $ScriptDir ".ralph-beads.yml"
+$ConfigFile = Join-Path $ScriptDir ".purser.yml"
 
 if ($Help) {
     Write-Host "Usage: .\init.ps1 [-Check] [-SkipGitHub]"
@@ -45,7 +45,7 @@ if ($Help) {
 function Write-Header {
     Write-Host ""
     Write-Host "========================================="
-    Write-Host "  Ralph-Beads Project Initialization"
+    Write-Host "  Purser Project Initialization"
     Write-Host "========================================="
     Write-Host ""
 }
@@ -316,7 +316,7 @@ if owner and repo and not skip_github:
     cfg["labels"]["bootstrap"] = "true"
 
 config.save_config(cfg, repo_root)
-print("  Configuration saved to .ralph-beads.yml")
+print("  Configuration saved to .purser.yml")
 "@
 
 try {

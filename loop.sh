@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph-Beads Loop: Autonomous AI development with dependency-aware task tracking
+# Purser Loop: Autonomous AI development with dependency-aware task tracking
 #
 # Usage:
 #   ./loop.sh              # Build mode, unlimited iterations
@@ -13,7 +13,7 @@
 #
 # Timeout:
 #   --timeout=VALUE        # Override per-iteration timeout (timeout(1) format: 900, 15m, 1h)
-#   RALPH_TIMEOUT=VALUE    # Same via environment variable
+#   PURSER_TIMEOUT=VALUE    # Same via environment variable
 #   Defaults: build=15m, plan=10m
 
 set -euo pipefail
@@ -25,9 +25,9 @@ CLAUDE_PID=""           # PID of current Claude subshell; empty when idle
 SHUTDOWN_REQUESTED=false
 SIGNAL_GRACE=30         # Seconds to wait for Claude to exit before force-kill
 
-# Timeout defaults per mode; override via --timeout=VALUE or RALPH_TIMEOUT env var
-TIMEOUT_BUILD="${RALPH_TIMEOUT:-900}"   # 15 minutes
-TIMEOUT_PLAN="${RALPH_TIMEOUT:-600}"    # 10 minutes
+# Timeout defaults per mode; override via --timeout=VALUE or PURSER_TIMEOUT env var
+TIMEOUT_BUILD="${PURSER_TIMEOUT:-900}"   # 15 minutes
+TIMEOUT_PLAN="${PURSER_TIMEOUT:-600}"    # 10 minutes
 TIMEOUT_OVERRIDE=""
 
 # ─── Signal handling ──────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ durations = [e.get('duration_s', 0) for e in entries]
 avg_dur = sum(durations) / len(durations) if durations else 0
 rate = (success / total * 100) if total else 0
 
-print('=== Ralph-Beads Iteration Stats ===')
+print('=== Purser Iteration Stats ===')
 print()
 print(f'  Total iterations:  {total}')
 print(f'  Success:           {success}')
@@ -135,15 +135,15 @@ for e in entries[-5:]:
         exit 0
         ;;
     sync)
-        echo "=== Ralph-Beads: GitHub Sync ==="
+        echo "=== Purser: GitHub Sync ==="
         exec scripts/gh-sync.sh "${PASSTHROUGH_ARGS[@]}"
         ;;
     triage)
-        echo "=== Ralph-Beads: Issue Triage ==="
+        echo "=== Purser: Issue Triage ==="
         exec scripts/gh-triage.sh "${PASSTHROUGH_ARGS[@]}"
         ;;
     changelog)
-        echo "=== Ralph-Beads: Changelog ==="
+        echo "=== Purser: Changelog ==="
         exec scripts/gh-changelog.sh "${PASSTHROUGH_ARGS[@]}"
         ;;
 esac
@@ -210,7 +210,7 @@ preflight_checks() {
 
 preflight_checks
 
-echo "=== Ralph-Beads Loop ==="
+echo "=== Purser Loop ==="
 echo "Mode: $MODE"
 echo "Prompt: $PROMPT_FILE"
 echo "Max iterations: ${MAX_ITERATIONS:-unlimited}"

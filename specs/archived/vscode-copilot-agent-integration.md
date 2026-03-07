@@ -1,11 +1,11 @@
 # VS Code Copilot Agent Integration
 
 ## Job To Be Done
-Enable GitHub Copilot agents in VS Code to autonomously execute the ralph-beads framework loop (plan, claim, implement, test, commit, close).
+Enable GitHub Copilot agents in VS Code to autonomously execute the purser framework loop (plan, claim, implement, test, commit, close).
 
 ## Requirements
-- Copilot agent instructions that encode the ralph-beads build loop (`bd ready` -> implement -> `bd close`)
-- Copilot agent instructions that encode the ralph-beads planning loop (specs -> beads task graph)
+- Copilot agent instructions that encode the purser build loop (`bd ready` -> implement -> `bd close`)
+- Copilot agent instructions that encode the purser planning loop (specs -> beads task graph)
 - Agent can read specs from `specs/`, interact with `bd` CLI, and commit results
 - Agent follows AGENTS.md operational guide and respects quality gates
 - Works with VS Code 1.108.2 agent mode (`.github/copilot-instructions.md` or equivalent)

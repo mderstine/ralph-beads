@@ -10,7 +10,7 @@ import sys
 
 from lib import get_repo_name, get_repo_owner
 
-PROJECT_TITLE = "Ralph-Beads"
+PROJECT_TITLE = "Purser"
 
 STATUS_OPTIONS = [
     {"name": "Backlog", "color": "GRAY", "description": "Not yet ready to work on"},

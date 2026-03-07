@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Ralph-Beads Project Initialization
+# Purser Project Initialization
 #
-# Bootstraps a new Ralph-Beads project from the GitHub template.
+# Bootstraps a new Purser project from the GitHub template.
 # Idempotent — safe to re-run; skips completed steps.
 #
 # Usage:
@@ -16,14 +16,14 @@
 #   4. Detect/create GitHub remote
 #   5. Detect/setup GitHub Project
 #   6. Bootstrap GitHub labels
-#   7. Save configuration to .ralph-beads.yml
+#   7. Save configuration to .purser.yml
 #   8. Print summary and next steps
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
-CONFIG_FILE="$SCRIPT_DIR/.ralph-beads.yml"
+CONFIG_FILE="$SCRIPT_DIR/.purser.yml"
 CHECK_ONLY=false
 SKIP_GITHUB=false
 
@@ -49,7 +49,7 @@ done
 print_header() {
     echo ""
     echo "========================================="
-    echo "  Ralph-Beads Project Initialization"
+    echo "  Purser Project Initialization"
     echo "========================================="
     echo ""
 }
@@ -334,7 +334,7 @@ if owner and repo and not skip_github:
     cfg["labels"]["bootstrap"] = "true"
 
 config.save_config(cfg, repo_root)
-print("  Configuration saved to .ralph-beads.yml")
+print("  Configuration saved to .purser.yml")
 PYEOF
 if [[ $? -ne 0 ]]; then
     echo "  WARNING: Failed to save configuration."

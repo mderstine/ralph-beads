@@ -14,7 +14,7 @@ import lib
 
 class TestGetRepoOwner:
     def test_returns_config_value_when_set(self, tmp_path):
-        cfg_file = tmp_path / ".ralph-beads.yml"
+        cfg_file = tmp_path / ".purser.yml"
         cfg_file.write_text("github:\n  owner: myorg\n  repo: myrepo\n")
         import config as cfg
         with patch.object(cfg, "_find_repo_root", return_value=tmp_path):

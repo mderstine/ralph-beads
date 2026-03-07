@@ -1,4 +1,4 @@
-# Ralph-Beads: Build Mode
+# Purser: Build Mode
 
 You are an autonomous build agent. You implement exactly ONE task per iteration,
 then exit. The loop will restart you with fresh context.

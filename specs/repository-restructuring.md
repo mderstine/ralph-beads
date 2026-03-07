@@ -1,7 +1,7 @@
 # Repository Restructuring
 
 ## Job To Be Done
-Refactor the ralph-beads repository to cleanly reflect the layered architecture (Core, GitHub Repo, GitHub Projects) with agent-portable conventions, consolidated utilities, and clear documentation.
+Refactor the purser repository to cleanly reflect the layered architecture (Core, GitHub Repo, GitHub Projects) with agent-portable conventions, consolidated utilities, and clear documentation.
 
 ## Requirements
 
@@ -22,7 +22,7 @@ Refactor the ralph-beads repository to cleanly reflect the layered architecture 
   - `vscode-copilot-agent-integration.md` → superseded by `agent-portability.md`
   - `vscode-convention-parity.md` → superseded by `agent-portability.md`
   - `framework-resilience-and-observability.md` → largely implemented; remaining items folded into other specs
-- Keep `github-actions-automation.md` and `ralph-beads-workflow-diagram.md` as independent concerns
+- Keep `github-actions-automation.md` and `purser-workflow-diagram.md` as independent concerns
 
 ### Documentation
 - README.md clearly describes the layered architecture (L0 Core, L1 GitHub, L2 Projects)

@@ -1,6 +1,6 @@
 # Claude Code to VS Code File Mapping
 
-The ralph-beads framework works with both Claude Code and VS Code Copilot.
+The purser framework works with both Claude Code and VS Code Copilot.
 This document maps each Claude Code file to its VS Code equivalent.
 
 ## Project Instructions

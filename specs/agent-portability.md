@@ -1,7 +1,7 @@
 # Agent Portability
 
 ## Job To Be Done
-Make the ralph-beads operating model work with multiple AI agent frontends (Claude Code, VS Code Copilot, and future agents) by separating agent-neutral conventions from agent-specific configuration adapters.
+Make the purser operating model work with multiple AI agent frontends (Claude Code, VS Code Copilot, and future agents) by separating agent-neutral conventions from agent-specific configuration adapters.
 
 ## Requirements
 

@@ -1,4 +1,4 @@
-"""GitHub Projects v2 detection and setup flow for Ralph-Beads.
+"""GitHub Projects v2 detection and setup flow for Purser.
 
 Detects GitHub Projects associated with a repository, offers selection
 when multiple exist, and optionally creates a new project with default
@@ -108,7 +108,7 @@ def _get_repo_id(owner: str, repo: str) -> str | None:
         return None
 
 
-def create_project(owner: str, repo: str, title: str = "Ralph-Beads") -> dict | None:
+def create_project(owner: str, repo: str, title: str = "Purser") -> dict | None:
     """Create a new GitHub Project v2 and link it to the repository.
 
     Returns dict with id, title, number, url on success, None on failure.

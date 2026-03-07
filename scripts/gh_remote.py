@@ -1,4 +1,4 @@
-"""GitHub remote detection and creation flow for Ralph-Beads.
+"""GitHub remote detection and creation flow for Purser.
 
 Detects GitHub remotes from git config, validates access via gh CLI,
 and optionally creates a new repository. Respects the github.auto_create

@@ -1,7 +1,7 @@
 # VS Code Convention Parity
 
 ## Job To Be Done
-Convert all Claude Code-specific configuration files to VS Code Copilot equivalents so the ralph-beads framework is fully operable from VS Code with GitHub Copilot agents.
+Convert all Claude Code-specific configuration files to VS Code Copilot equivalents so the purser framework is fully operable from VS Code with GitHub Copilot agents.
 
 ## Requirements
 - `.claude/commands/*.md` slash commands have equivalent VS Code Copilot prompt files (`.github/prompts/*.prompt.md`) for: plan, build, status, add-spec, create-issue

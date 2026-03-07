@@ -1,7 +1,7 @@
 # Framework Resilience and Observability
 
 ## Job To Be Done
-Make the Ralph-Beads loop robust against hangs, failures, and silent drift by adding timeouts, pre-flight checks, structured logging, and shared script utilities.
+Make the Purser loop robust against hangs, failures, and silent drift by adding timeouts, pre-flight checks, structured logging, and shared script utilities.
 
 ## Requirements
 
@@ -45,5 +45,5 @@ Make the Ralph-Beads loop robust against hangs, failures, and silent drift by ad
 
 ## Notes
 - The `PIPESTATUS` handling on line 96 of loop.sh (`${PIPESTATUS[1]:-0}`) may not capture exit codes correctly when piped through `tee` -- investigate and fix if needed
-- Current `/tmp/ralph-beads-iter-*.log` files are ephemeral and lost on reboot -- project-local logs solve this
+- Current `/tmp/purser-iter-*.log` files are ephemeral and lost on reboot -- project-local logs solve this
 - The `run()` function appears in 4 separate scripts with slightly different error handling -- consolidation will reduce maintenance burden

@@ -1,4 +1,4 @@
-"""Tests for scripts/config.py — Ralph-Beads configuration loader."""
+"""Tests for scripts/config.py — Purser configuration loader."""
 
 import os
 import sys
@@ -72,7 +72,7 @@ class TestLoadConfig:
         assert result["labels"]["bootstrap"] == "false"
 
     def test_file_overrides_defaults(self, tmp_path):
-        cfg_file = tmp_path / ".ralph-beads.yml"
+        cfg_file = tmp_path / ".purser.yml"
         cfg_file.write_text("github:\n  owner: myorg\n  repo: myrepo\n")
         result = config.load_config(tmp_path)
         assert result["github"]["owner"] == "myorg"
@@ -81,14 +81,14 @@ class TestLoadConfig:
         assert result["github"]["remote"] == "origin"
 
     def test_env_overrides_file(self, tmp_path, monkeypatch):
-        cfg_file = tmp_path / ".ralph-beads.yml"
+        cfg_file = tmp_path / ".purser.yml"
         cfg_file.write_text("github:\n  owner: from-file\n")
-        monkeypatch.setenv("RALPH_BEADS_GITHUB_OWNER", "from-env")
+        monkeypatch.setenv("PURSER_GITHUB_OWNER", "from-env")
         result = config.load_config(tmp_path)
         assert result["github"]["owner"] == "from-env"
 
     def test_env_overrides_defaults(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("RALPH_BEADS_GITHUB_AUTO_CREATE", "skip")
+        monkeypatch.setenv("PURSER_GITHUB_AUTO_CREATE", "skip")
         result = config.load_config(tmp_path)
         assert result["github"]["auto_create"] == "skip"
 
@@ -98,7 +98,7 @@ class TestSaveConfig:
         cfg = {"github": {"owner": "test", "repo": "myrepo"}}
         path = config.save_config(cfg, tmp_path)
         assert path.exists()
-        assert path.name == ".ralph-beads.yml"
+        assert path.name == ".purser.yml"
         content = path.read_text()
         assert "owner: test" in content
         assert "repo: myrepo" in content
@@ -114,7 +114,7 @@ class TestSaveConfig:
 
 class TestGet:
     def test_get_existing_value(self, tmp_path):
-        cfg_file = tmp_path / ".ralph-beads.yml"
+        cfg_file = tmp_path / ".purser.yml"
         cfg_file.write_text("github:\n  owner: testorg\n")
         result = config.get("github", "owner", tmp_path)
         assert result == "testorg"
@@ -131,4 +131,4 @@ class TestGet:
 class TestConfigPath:
     def test_returns_yml_in_root(self, tmp_path):
         path = config.config_path(tmp_path)
-        assert path == tmp_path / ".ralph-beads.yml"
+        assert path == tmp_path / ".purser.yml"

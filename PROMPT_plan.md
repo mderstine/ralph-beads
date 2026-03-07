@@ -5,7 +5,7 @@ create a dependency-aware task graph using beads (`bd`).
 
 ## Phase 0: Orient
 
-1. Study all files in `specs/` using parallel subagents to understand requirements
+1. Study all files in `specs/` to understand requirements
 2. Run `bd prime` to understand current project state
 3. Run `bd list --status open --json` to see existing work
 4. Study `AGENTS.md` for project-specific patterns and constraints
@@ -62,11 +62,7 @@ bd dep add <id-a> <id-b> --type related --json
 2. Run `bd ready --json` to verify at least some work is unblocked
 3. Run `bd dep tree <epic-id>` for each epic to verify the graph makes sense
 
-## Phase 4: Sync & Exit
-
-```bash
-bd sync
-```
+## Phase 4: Exit
 
 Report a summary of what was planned:
 - Total issues created (by type and priority)

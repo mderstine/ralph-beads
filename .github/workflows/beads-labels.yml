@@ -1,0 +1,31 @@
+name: Beads Labels
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview label creation without making changes"
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    if: github.repository == 'mderstine/ralph-beads'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Bootstrap beads labels
+        shell: bash
+        run: |
+          args=()
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          scripts/gh-labels.sh "${args[@]}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

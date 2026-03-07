@@ -1,4 +1,4 @@
-"""Shared utilities for ralph-beads GitHub integration scripts.
+"""Shared utilities for purser GitHub integration scripts.
 
 All functions use only Python stdlib. This module is imported by the
 embedded Python in gh-sync.sh, gh-triage.sh, gh-changelog.sh, and
@@ -59,7 +59,7 @@ def get_repo_url():
 def get_repo_owner():
     """Get the GitHub repo owner login.
 
-    Checks .ralph-beads.yml (github.owner) and RALPH_BEADS_GITHUB_OWNER first.
+    Checks .purser.yml (github.owner) and PURSER_GITHUB_OWNER first.
     Falls back to detecting via 'gh repo view' when not configured.
     """
     if _config is not None:
@@ -72,7 +72,7 @@ def get_repo_owner():
 def get_repo_name():
     """Get the GitHub repo name.
 
-    Checks .ralph-beads.yml (github.repo) and RALPH_BEADS_GITHUB_REPO first.
+    Checks .purser.yml (github.repo) and PURSER_GITHUB_REPO first.
     Falls back to detecting via 'gh repo view' when not configured.
     """
     if _config is not None:
@@ -85,8 +85,8 @@ def get_repo_name():
 def get_project_number():
     """Get the GitHub Projects v2 board number from config.
 
-    Returns the integer project number from .ralph-beads.yml (github.project_number)
-    or RALPH_BEADS_GITHUB_PROJECT_NUMBER. Returns None when not configured.
+    Returns the integer project number from .purser.yml (github.project_number)
+    or PURSER_GITHUB_PROJECT_NUMBER. Returns None when not configured.
     """
     if _config is None:
         return None

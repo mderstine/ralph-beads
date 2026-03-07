@@ -1,7 +1,7 @@
-# Ralph-Beads Project Configuration
+# Purser Project Configuration
 #
-# Copy this file to .ralph-beads.yml and customize for your project.
-# Environment variables (RALPH_BEADS_*) override values in this file.
+# Copy this file to .purser.yml and customize for your project.
+# Environment variables (PURSER_*) override values in this file.
 #
 # This file is .gitignore'd by default. Commit it if you want shared config.
 

@@ -10,6 +10,11 @@ import re
 import subprocess
 import sys
 
+try:
+    import config as _config
+except ImportError:
+    _config = None
+
 
 def run(cmd, capture=True):
     """Run a command (list of args) and return stdout."""
@@ -52,13 +57,46 @@ def get_repo_url():
 
 
 def get_repo_owner():
-    """Get the GitHub repo owner login."""
+    """Get the GitHub repo owner login.
+
+    Checks .ralph-beads.yml (github.owner) and RALPH_BEADS_GITHUB_OWNER first.
+    Falls back to detecting via 'gh repo view' when not configured.
+    """
+    if _config is not None:
+        owner = _config.get("github", "owner")
+        if owner:
+            return owner
     return run(["gh", "repo", "view", "--json", "owner", "-q", ".owner.login"])
 
 
 def get_repo_name():
-    """Get the GitHub repo name."""
+    """Get the GitHub repo name.
+
+    Checks .ralph-beads.yml (github.repo) and RALPH_BEADS_GITHUB_REPO first.
+    Falls back to detecting via 'gh repo view' when not configured.
+    """
+    if _config is not None:
+        repo = _config.get("github", "repo")
+        if repo:
+            return repo
     return run(["gh", "repo", "view", "--json", "name", "-q", ".name"])
+
+
+def get_project_number():
+    """Get the GitHub Projects v2 board number from config.
+
+    Returns the integer project number from .ralph-beads.yml (github.project_number)
+    or RALPH_BEADS_GITHUB_PROJECT_NUMBER. Returns None when not configured.
+    """
+    if _config is None:
+        return None
+    value = _config.get("github", "project_number")
+    if value:
+        try:
+            return int(value)
+        except ValueError:
+            pass
+    return None
 
 
 def load_beads_issues(status=None):

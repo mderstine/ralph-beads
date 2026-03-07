@@ -29,16 +29,20 @@ Instead of running `loop.sh`, invoke agents directly in Copilot Chat:
 | Check project status | Run `bd prime` in terminal |
 | Create a new issue | Use the `beads-create` skill |
 | Triage/prioritize backlog | Use the `beads-triage` skill |
+| Sync beads to GitHub Issues | `./loop.sh sync` in terminal |
+| Triage GitHub Issues into specs | `./loop.sh triage` in terminal |
 
 ## Project Structure
 
-- `specs/` — Requirement documents (one per topic)
-- `AGENTS.md` — Operational guide with build commands and patterns
-- `PROMPT_plan.md` — Planning mode instructions (specs to task graph)
-- `PROMPT_build.md` — Build mode instructions (claim, implement, close)
-- `.github/agents/beads-pm.agent.md` — VS Code planning agent
-- `.github/agents/beads-dev.agent.md` — VS Code build agent
-- `.github/skills/` — Reusable skill definitions (beads-create, beads-triage, beads-workflow)
+- `PROMPT_plan.md` — Planning mode instructions (specs → beads issues)
+- `PROMPT_build.md` — Build mode instructions (bd ready → implement → close)
+- `AGENTS.md` — Operational guide loaded every iteration
+- `loop.sh` — The Ralph Loop orchestrator (alternative to agent invocations)
+- `specs/` — User's requirements documents (one per topic of concern)
+- `scripts/` — GitHub integration scripts (gh-sync.sh, gh-triage.sh, gh-project.sh, gh-labels.sh)
+- `.github/agents/` — VS Code agents (beads-pm, beads-dev)
+- `.github/prompts/` — VS Code prompt files (build, plan, status, add-spec, create-issue)
+- `.github/skills/` — Reusable skill definitions (beads-add-spec, beads-create, beads-triage, beads-workflow)
 - `.github/instructions/beads-conventions.instructions.md` — Always-on conventions
 - `.beads/` — Beads database (managed by bd, do not edit directly)
 

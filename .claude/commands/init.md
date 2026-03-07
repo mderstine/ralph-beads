@@ -1,4 +1,4 @@
-Initialize a new Ralph-Beads project in the current directory. Run the init script and guide the user through setup.
+Initialize a new Purser project in the current directory. Run the init script and guide the user through setup.
 
 Steps:
 1. Run `./init.sh --check` to verify prerequisites (git, python3, gh, bd)
@@ -7,7 +7,7 @@ Steps:
    - Detect or create GitHub remote
    - Detect or setup GitHub Project board
    - Bootstrap GitHub labels
-   - Save configuration to `.ralph-beads.yml`
+   - Save configuration to `.purser.yml`
 3. Report what was configured and print next steps
 
 Options the user can pass as arguments:

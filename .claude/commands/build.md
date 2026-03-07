@@ -1,4 +1,4 @@
-Run one iteration of the Ralph-Beads build loop. Implement exactly ONE task, then stop.
+Run one iteration of the Purser build loop. Implement exactly ONE task, then stop.
 
 Follow the instructions in PROMPT_build.md exactly:
 1. Run `bd ready --json` to find unblocked work

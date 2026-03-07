@@ -1,4 +1,4 @@
-Run the Ralph-Beads planning loop. Read all specs in `specs/` and create a dependency-aware task graph using beads (`bd`).
+Run the Purser planning loop. Read all specs in `specs/` and create a dependency-aware task graph using beads (`bd`).
 
 Follow the instructions in PROMPT_plan.md exactly:
 1. Study all specs in `specs/`

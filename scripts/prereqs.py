@@ -38,6 +38,7 @@ def _detect_platform() -> str:
 REQUIRED_TOOLS = [
     ("git", "--version", "Git version control"),
     ("python3", "--version", "Python 3.12+ interpreter"),
+    ("uv", "--version", "Python package manager"),
     ("gh", "--version", "GitHub CLI"),
     ("bd", "--version", "Beads issue tracker CLI"),
 ]
@@ -47,24 +48,28 @@ INSTALL_INSTRUCTIONS: dict[str, dict[str, str]] = {
     "macos": {
         "git": "brew install git",
         "python3": "brew install python@3.12",
+        "uv": "brew install uv  (or curl -LsSf https://astral.sh/uv/install.sh | sh)",
         "gh": "brew install gh",
         "bd": "npm install -g @beads/bd",
     },
     "linux-apt": {
         "git": "sudo apt install git",
         "python3": "sudo apt install python3",
+        "uv": "curl -LsSf https://astral.sh/uv/install.sh | sh",
         "gh": "See https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
         "bd": "npm install -g @beads/bd",
     },
     "linux-other": {
         "git": "Install via your package manager",
         "python3": "Install via your package manager",
+        "uv": "curl -LsSf https://astral.sh/uv/install.sh | sh",
         "gh": "See https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
         "bd": "npm install -g @beads/bd",
     },
     "windows": {
         "git": "winget install Git.Git  (or scoop install git)",
         "python3": "winget install Python.Python.3.12  (or scoop install python)",
+        "uv": "powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"",
         "gh": "winget install GitHub.cli  (or scoop install gh)",
         "bd": "npm install -g @beads/bd",
     },

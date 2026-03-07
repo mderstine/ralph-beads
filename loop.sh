@@ -117,11 +117,51 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
     exit 1
 fi
 
-# Verify bd is available
-if ! command -v bd &>/dev/null; then
-    echo "Error: bd (beads) CLI not found. Install with: npm install -g @beads/bd"
-    exit 1
-fi
+# ─── Pre-flight checks ────────────────────────────────────────────────────────
+
+preflight_checks() {
+    local errors=0
+
+    # 1. bd CLI available
+    if ! command -v bd &>/dev/null; then
+        echo "ERROR: bd (beads) CLI not found. Install with: npm install -g @beads/bd"
+        errors=$((errors + 1))
+    fi
+
+    # 2. claude CLI available
+    if ! command -v claude &>/dev/null; then
+        echo "ERROR: claude CLI not found. Install Claude Code to continue."
+        errors=$((errors + 1))
+    fi
+
+    # 3. beads database accessible
+    if ! bd prime &>/dev/null 2>&1; then
+        echo "ERROR: bd prime failed — beads database may be corrupted or inaccessible."
+        echo "       Run 'bd prime' manually to see the error."
+        errors=$((errors + 1))
+    fi
+
+    if [[ $errors -gt 0 ]]; then
+        echo ""
+        echo "Pre-flight failed with $errors error(s). Fix the issues above and retry."
+        exit 1
+    fi
+
+    # 4. Warn if on main/master branch (non-fatal)
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    if [[ "$branch" == "main" || "$branch" == "master" ]]; then
+        echo "WARNING: Running on '$branch' branch. Consider working on a feature branch."
+    fi
+
+    # 5. Warn about uncommitted changes — may conflict with loop commits (non-fatal)
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        echo "WARNING: Uncommitted changes detected — these may conflict with loop commits:"
+        git status --short 2>/dev/null | head -10
+    fi
+}
+
+preflight_checks
 
 echo "=== Ralph-Beads Loop ==="
 echo "Mode: $MODE"

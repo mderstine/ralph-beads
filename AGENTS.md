@@ -35,10 +35,39 @@ bd prime                     # Session context summary
 
 ## Coding Standards
 
-- Python 3.12+
+### General
+- Python 3.12+ — use latest idioms: `match` statements, `type X = ...` aliases, `X | Y` union types, f-strings
 - Type annotations on public APIs
-- Tests for all new functionality
+- All new functionality must have unit tests
+- Develop modularly: small, focused functions with clear interfaces
 - Keep functions small and focused
+
+### Library Preferences
+- **Polars** over Pandas for dataframe operations
+- **DuckDB** over SQLite for analytical queries
+- Only use Pandas when Polars/DuckDB solutions don't readily exist
+
+### Polars Style
+Write Polars method chains vertically for readability. Each bracket, brace, and parenthesis on its own line:
+
+```python
+# Good — vertical, readable
+result = (
+    df
+    .filter(
+        pl.col("status") == "active"
+    )
+    .group_by(
+        "category"
+    )
+    .agg(
+        pl.col("value").sum()
+    )
+)
+
+# Bad — horizontal, hard to review
+result = df.filter(pl.col("status") == "active").group_by("category").agg(pl.col("value").sum())
+```
 
 ## Known Patterns & Gotchas
 

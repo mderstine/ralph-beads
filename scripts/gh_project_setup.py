@@ -57,7 +57,8 @@ def list_projects(owner: str, repo: str) -> list[dict]:
 
     Returns a list of dicts with keys: id, title, number, url.
     """
-    data = _gql("""
+    data = _gql(
+        """
         query($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
                 projectsV2(first: 50) {
@@ -65,7 +66,10 @@ def list_projects(owner: str, repo: str) -> list[dict]:
                 }
             }
         }
-    """, owner=owner, repo=repo)
+    """,
+        owner=owner,
+        repo=repo,
+    )
     if not data:
         return []
     try:
@@ -87,11 +91,15 @@ def _get_owner_id() -> str | None:
 
 def _get_repo_id(owner: str, repo: str) -> str | None:
     """Get the repository node ID."""
-    data = _gql("""
+    data = _gql(
+        """
         query($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) { id }
         }
-    """, owner=owner, repo=repo)
+    """,
+        owner=owner,
+        repo=repo,
+    )
     if not data:
         return None
     try:
@@ -110,13 +118,17 @@ def create_project(owner: str, repo: str, title: str = "Ralph-Beads") -> dict | 
         print("  Failed to get owner ID for project creation.", file=sys.stderr)
         return None
 
-    data = _gql("""
+    data = _gql(
+        """
         mutation($ownerId: ID!, $title: String!) {
             createProjectV2(input: {ownerId: $ownerId, title: $title}) {
                 projectV2 { id title number url }
             }
         }
-    """, ownerId=owner_id, title=title)
+    """,
+        ownerId=owner_id,
+        title=title,
+    )
     if not data:
         print("  Failed to create project.", file=sys.stderr)
         return None
@@ -130,13 +142,17 @@ def create_project(owner: str, repo: str, title: str = "Ralph-Beads") -> dict | 
     # Link project to repository
     repo_id = _get_repo_id(owner, repo)
     if repo_id:
-        _gql("""
+        _gql(
+            """
             mutation($projectId: ID!, $repositoryId: ID!) {
                 linkProjectV2ToRepository(input: {
                     projectId: $projectId, repositoryId: $repositoryId
                 }) { repository { nameWithOwner } }
             }
-        """, projectId=project["id"], repositoryId=repo_id)
+        """,
+            projectId=project["id"],
+            repositoryId=repo_id,
+        )
 
     # Configure Status field with default columns
     _configure_status_field(project["id"])
@@ -147,7 +163,8 @@ def create_project(owner: str, repo: str, title: str = "Ralph-Beads") -> dict | 
 def _configure_status_field(project_id: str) -> None:
     """Update the Status field to have the default columns."""
     # Get fields to find the Status field ID
-    data = _gql("""
+    data = _gql(
+        """
         query($projectId: ID!) {
             node(id: $projectId) {
                 ... on ProjectV2 {
@@ -161,7 +178,9 @@ def _configure_status_field(project_id: str) -> None:
                 }
             }
         }
-    """, projectId=project_id)
+    """,
+        projectId=project_id,
+    )
     if not data:
         return
 
@@ -183,7 +202,8 @@ def _configure_status_field(project_id: str) -> None:
         f'{{name: "{c["name"]}", color: {c["color"]}, description: "{c["description"]}"}}'
         for c in DEFAULT_COLUMNS
     )
-    _gql(f"""
+    _gql(
+        f"""
         mutation($fieldId: ID!) {{
             updateProjectV2Field(input: {{
                 fieldId: $fieldId
@@ -196,7 +216,9 @@ def _configure_status_field(project_id: str) -> None:
                 }}
             }}
         }}
-    """, fieldId=status_field_id)
+    """,
+        fieldId=status_field_id,
+    )
 
 
 def _prompt_yes_no(question: str, default: bool = True) -> bool:
@@ -218,7 +240,7 @@ def _prompt_select(projects: list[dict]) -> dict | None:
     print("Multiple GitHub Projects found:")
     for i, p in enumerate(projects, 1):
         print(f"  {i}. {p['title']} (#{p['number']})")
-    print(f"  0. Skip — don't use a project")
+    print("  0. Skip — don't use a project")
     print()
     try:
         choice = input("Select a project [1]: ").strip()
@@ -312,7 +334,9 @@ def detect_or_setup(
             return {
                 "status": "found",
                 "project": projects[0],
-                "message": f"Found {len(projects)} projects (returning first: {projects[0]['title']})",
+                "message": (
+                    f"Found {len(projects)} projects (returning first: {projects[0]['title']})"
+                ),
             }
         selected = _prompt_select(projects)
         if selected:
@@ -371,7 +395,8 @@ def main():
     # Fall back to gh CLI detection if not in config
     if not owner or not repo:
         try:
-            from lib import get_repo_owner, get_repo_name
+            from lib import get_repo_name, get_repo_owner
+
             owner = owner or get_repo_owner()
             repo = repo or get_repo_name()
         except ImportError:

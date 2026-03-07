@@ -2,12 +2,14 @@
 """
 add_spec.py: Draft a polished spec from a user prompt and save to specs/ directory.
 """
-import sys
+
 import os
+import sys
 from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import slugify
+
 
 def draft_spec(title, description):
     today = date.today().isoformat()
@@ -31,6 +33,7 @@ def draft_spec(title, description):
 - ...
 """
 
+
 def main():
     if len(sys.argv) < 3:
         print("Usage: add_spec.py <title> <description>")
@@ -38,11 +41,12 @@ def main():
     title = sys.argv[1]
     description = sys.argv[2]
     slug = slugify(title)
-    out_path = os.path.join('specs', f'{slug}.md')
-    os.makedirs('specs', exist_ok=True)
-    with open(out_path, 'w') as f:
+    out_path = os.path.join("specs", f"{slug}.md")
+    os.makedirs("specs", exist_ok=True)
+    with open(out_path, "w") as f:
         f.write(draft_spec(title, description))
     print(f"Spec saved to {out_path}")
+
 
 if __name__ == "__main__":
     main()

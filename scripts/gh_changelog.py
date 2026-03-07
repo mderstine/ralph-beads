@@ -3,12 +3,13 @@
 Groups by epic and type, includes commit SHAs and GitHub issue links.
 """
 
+import contextlib
 import json
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from lib import run, get_commit_for_issue, get_repo_url
+from lib import get_commit_for_issue, get_repo_url, run
 
 
 def parse_args(argv):
@@ -56,9 +57,9 @@ def type_emoji(t):
 def format_changelog(issues, repo_url=None):
     """Format issues as a markdown changelog."""
     lines = []
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    lines.append(f"# Changelog")
-    lines.append(f"")
+    now = datetime.now(UTC).strftime("%Y-%m-%d")
+    lines.append("# Changelog")
+    lines.append("")
     lines.append(f"Generated {now} from beads issue tracker.")
     lines.append("")
 
@@ -100,10 +101,8 @@ def format_changelog(issues, repo_url=None):
         gh_ref = issue.get("external_ref", "")
         gh_num = None
         if gh_ref and gh_ref.startswith("gh-"):
-            try:
+            with contextlib.suppress(ValueError):
                 gh_num = int(gh_ref[3:])
-            except ValueError:
-                pass
 
         parts = [f"- **{itype}:** {title}"]
 

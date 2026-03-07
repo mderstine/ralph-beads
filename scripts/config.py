@@ -14,7 +14,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 # Environment variable prefix
 _ENV_PREFIX = "RALPH_BEADS_"
 
@@ -47,8 +46,7 @@ def _find_repo_root() -> Path:
     """Find the git repository root."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True
+            ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
         )
         if result.returncode == 0:
             return Path(result.stdout.strip())
@@ -87,7 +85,7 @@ def _parse_yaml(text: str) -> dict[str, dict[str, str]]:
 
         # Nested key-value pair (indented)
         if current_section is not None and line[0].isspace():
-            match = re.match(r'\s+(\w+)\s*:\s*(.*)', line)
+            match = re.match(r"\s+(\w+)\s*:\s*(.*)", line)
             if match:
                 key = match.group(1)
                 value = match.group(2).strip()
@@ -96,7 +94,7 @@ def _parse_yaml(text: str) -> dict[str, dict[str, str]]:
                     value = value[1:-1]
                 # Strip inline comments
                 if " #" in value:
-                    value = value[:value.index(" #")].strip()
+                    value = value[: value.index(" #")].strip()
                 result[current_section][key] = value
 
     return result
@@ -140,6 +138,7 @@ def load_config(repo_root: Path | None = None) -> dict[str, dict[str, str]]:
     Returns defaults if no config file exists.
     """
     import copy
+
     config = copy.deepcopy(DEFAULTS)
 
     path = config_path(repo_root)
@@ -172,6 +171,7 @@ def get(section: str, key: str, repo_root: Path | None = None) -> str:
 
 
 # --- CLI interface for bash scripts ---
+
 
 def main():
     """CLI: read config values for use in shell scripts.

@@ -28,10 +28,10 @@ def run(cmd, capture=True):
 def slugify(title, max_length=60):
     """Convert a title to a filename/label-safe slug."""
     slug = title.lower().strip()
-    slug = re.sub(r'[^\w\s-]', '', slug)
-    slug = re.sub(r'[\s_]+', '-', slug)
-    slug = re.sub(r'-+', '-', slug)
-    slug = slug.strip('-')
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[\s_]+", "-", slug)
+    slug = re.sub(r"-+", "-", slug)
+    slug = slug.strip("-")
     return slug[:max_length]
 
 

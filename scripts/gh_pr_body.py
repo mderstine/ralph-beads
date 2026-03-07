@@ -9,7 +9,7 @@ import re
 import sys
 from collections import defaultdict
 
-from lib import run, get_repo_url
+from lib import get_repo_url, run
 
 
 def parse_args(argv):
@@ -72,8 +72,13 @@ def lookup_beads_issue(beads_id):
 
 def type_label(t):
     """Human-readable type."""
-    return {"bug": "Bug fix", "feature": "Feature", "task": "Task",
-            "chore": "Chore", "epic": "Epic"}.get(t, t)
+    return {
+        "bug": "Bug fix",
+        "feature": "Feature",
+        "task": "Task",
+        "chore": "Chore",
+        "epic": "Epic",
+    }.get(t, t)
 
 
 def format_pr_body(beads_ids, commit_subjects, base, repo_url=None):
@@ -120,10 +125,7 @@ def format_pr_body(beads_ids, commit_subjects, base, repo_url=None):
             gh_link = ""
             if gh_ref and gh_ref.startswith("gh-"):
                 gh_num = gh_ref[3:]
-                if repo_url:
-                    gh_link = f"[#{gh_num}]({repo_url}/issues/{gh_num})"
-                else:
-                    gh_link = f"#{gh_num}"
+                gh_link = f"[#{gh_num}]({repo_url}/issues/{gh_num})" if repo_url else f"#{gh_num}"
             lines.append(f"| `{bid}` | {gh_link} | {itype} | {status} |")
         lines.append("")
 
@@ -172,7 +174,9 @@ def main():
     if args["output"]:
         with open(args["output"], "w") as f:
             f.write(body)
-        print(f"Wrote PR body to {args['output']} ({len(beads_ids)} beads issues, {len(commit_subjects)} commits)")
+        n_issues = len(beads_ids)
+        n_commits = len(commit_subjects)
+        print(f"Wrote PR body to {args['output']} ({n_issues} beads issues, {n_commits} commits)")
     else:
         print(body)
 

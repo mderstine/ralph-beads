@@ -28,10 +28,15 @@ def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
     """Run a command and return the CompletedProcess."""
     try:
         return subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except FileNotFoundError:
-        return subprocess.CompletedProcess(cmd, returncode=127, stdout="", stderr="command not found")
+        return subprocess.CompletedProcess(
+            cmd, returncode=127, stdout="", stderr="command not found"
+        )
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(cmd, returncode=124, stdout="", stderr="timeout")
 
@@ -84,17 +89,21 @@ def detect_github_remotes() -> list[dict[str, str]]:
     for name, url in remotes.items():
         parsed = _parse_github_url(url)
         if parsed:
-            github_remotes.append({
-                "name": name,
-                "url": url,
-                "owner": parsed[0],
-                "repo": parsed[1],
-            })
+            github_remotes.append(
+                {
+                    "name": name,
+                    "url": url,
+                    "owner": parsed[0],
+                    "repo": parsed[1],
+                }
+            )
 
     return github_remotes
 
 
-def select_remote(remotes: list[dict[str, str]], preferred: str = "origin") -> dict[str, str] | None:
+def select_remote(
+    remotes: list[dict[str, str]], preferred: str = "origin"
+) -> dict[str, str] | None:
     """Select the best remote, preferring the configured/origin remote."""
     if not remotes:
         return None
@@ -158,7 +167,17 @@ def create_repo(name: str, visibility: str = "private") -> dict[str, str] | None
 
     flag = f"--{visibility}"
     result = _run(
-        ["gh", "repo", "create", name, flag, "--source=.", "--remote=origin", "--json", "owner,name,url"],
+        [
+            "gh",
+            "repo",
+            "create",
+            name,
+            flag,
+            "--source=.",
+            "--remote=origin",
+            "--json",
+            "owner,name,url",
+        ],
         timeout=60,
     )
     if result.returncode != 0:
@@ -170,7 +189,9 @@ def create_repo(name: str, visibility: str = "private") -> dict[str, str] | None
         return {
             "name": "origin",
             "url": data.get("url", ""),
-            "owner": data["owner"]["login"] if isinstance(data.get("owner"), dict) else str(data.get("owner", "")),
+            "owner": data["owner"]["login"]
+            if isinstance(data.get("owner"), dict)
+            else str(data.get("owner", "")),
             "repo": data.get("name", name),
         }
     except (json.JSONDecodeError, KeyError) as e:
@@ -203,7 +224,11 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
             "remote": remote,
             "validated": validated,
             "message": f"Found GitHub remote '{remote['name']}': {remote['owner']}/{remote['repo']}"
-                       + (" (validated)" if validated else " (not validated — gh CLI unavailable or no access)"),
+            + (
+                " (validated)"
+                if validated
+                else " (not validated — gh CLI unavailable or no access)"
+            ),
         }
 
     # Step 2: No GitHub remote found
@@ -220,7 +245,9 @@ def detect_or_create(repo_root: Path | None = None, check_only: bool = False) ->
             "status": "skipped",
             "remote": None,
             "validated": False,
-            "message": "No GitHub remote found and gh CLI is not installed. GitHub integration skipped.",
+            "message": (
+                "No GitHub remote found and gh CLI is not installed. GitHub integration skipped."
+            ),
         }
 
     # Step 3: Prompt or auto-create

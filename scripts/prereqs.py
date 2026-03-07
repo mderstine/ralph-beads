@@ -69,7 +69,7 @@ INSTALL_INSTRUCTIONS: dict[str, dict[str, str]] = {
     "windows": {
         "git": "winget install Git.Git  (or scoop install git)",
         "python3": "winget install Python.Python.3.12  (or scoop install python)",
-        "uv": "powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"",
+        "uv": 'powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"',
         "gh": "winget install GitHub.cli  (or scoop install gh)",
         "bd": "npm install -g @beads/bd",
     },
@@ -81,7 +81,9 @@ def _get_version(command: str, version_flag: str) -> str | None:
     try:
         result = subprocess.run(
             [command, version_flag],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             # Return first non-empty line of output
@@ -124,13 +126,15 @@ def check_prerequisites() -> dict:
             all_ok = False
 
         install_map = INSTALL_INSTRUCTIONS.get(plat, INSTALL_INSTRUCTIONS["linux-other"])
-        tools.append({
-            "name": command,
-            "description": description,
-            "found": found,
-            "version": version,
-            "install": install_map.get(command, ""),
-        })
+        tools.append(
+            {
+                "name": command,
+                "description": description,
+                "found": found,
+                "version": version,
+                "install": install_map.get(command, ""),
+            }
+        )
 
     return {
         "platform": plat,

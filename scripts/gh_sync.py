@@ -3,12 +3,12 @@
 Beads is source of truth for task state. GitHub is the public mirror.
 """
 
+import contextlib
 import json
-import os
 import subprocess
 import sys
 
-from lib import run, get_commit_for_issue, slugify, get_repo_owner, get_repo_name
+from lib import get_commit_for_issue, run, slugify
 
 
 def parse_args(argv):
@@ -29,8 +29,19 @@ def get_beads_issues():
 
 def get_gh_issues():
     """Get all GitHub issues (open and closed) as a dict keyed by number."""
-    raw = run(['gh', 'issue', 'list', '--state', 'all', '--limit', '1000',
-               '--json', 'number,title,state,labels,body'])
+    raw = run(
+        [
+            "gh",
+            "issue",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "1000",
+            "--json",
+            "number,title,state,labels,body",
+        ]
+    )
     if not raw:
         return {}
     issues = json.loads(raw)
@@ -81,10 +92,8 @@ def build_dependency_maps(beads_issues):
         beads_id = issue["id"]
         ref = issue.get("external_ref", "")
         if ref and ref.startswith("gh-"):
-            try:
+            with contextlib.suppress(ValueError):
                 ext_ref_map[beads_id] = int(ref[3:])
-            except ValueError:
-                pass
 
     for issue in beads_issues:
         beads_id = issue["id"]
@@ -98,7 +107,9 @@ def build_dependency_maps(beads_issues):
     return ext_ref_map, blocked_by_map, blocks_map
 
 
-def format_gh_body(issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, children_map=None):
+def format_gh_body(
+    issue, ext_ref_map=None, blocked_by_map=None, blocks_map=None, children_map=None
+):
     """Format a GitHub issue body from a beads issue."""
     parts = []
 
@@ -179,7 +190,15 @@ def get_external_ref(issue):
     return None
 
 
-def create_gh_issue(issue, dry_run, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None, children_map=None):
+def create_gh_issue(
+    issue,
+    dry_run,
+    ext_ref_map=None,
+    blocked_by_map=None,
+    blocks_map=None,
+    epic_titles=None,
+    children_map=None,
+):
     """Create a new GitHub issue and return the issue number."""
     title = issue["title"]
     body = format_gh_body(issue, ext_ref_map, blocked_by_map, blocks_map, children_map)
@@ -187,7 +206,7 @@ def create_gh_issue(issue, dry_run, ext_ref_map=None, blocked_by_map=None, block
     label_args = ",".join(labels)
 
     if dry_run:
-        print(f"  would create: #{issue['id']} -> GH issue \"{title}\" [{label_args}]")
+        print(f'  would create: #{issue["id"]} -> GH issue "{title}" [{label_args}]')
         return None
 
     cmd_parts = ["gh", "issue", "create", "--title", title, "--body", body]
@@ -206,11 +225,21 @@ def create_gh_issue(issue, dry_run, ext_ref_map=None, blocked_by_map=None, block
         print(f"  ERROR: could not parse issue number from: {url}")
         return None
 
-    print(f"  created: {issue['id']} -> #{gh_num} \"{title}\"")
+    print(f'  created: {issue["id"]} -> #{gh_num} "{title}"')
     return gh_num
 
 
-def update_gh_issue(gh_num, issue, gh_issue, dry_run, ext_ref_map=None, blocked_by_map=None, blocks_map=None, epic_titles=None, children_map=None):
+def update_gh_issue(
+    gh_num,
+    issue,
+    gh_issue,
+    dry_run,
+    ext_ref_map=None,
+    blocked_by_map=None,
+    blocks_map=None,
+    epic_titles=None,
+    children_map=None,
+):
     """Update an existing GitHub issue if it differs from beads state."""
     changes = []
     title = issue["title"]
@@ -225,9 +254,20 @@ def update_gh_issue(gh_num, issue, gh_issue, dry_run, ext_ref_map=None, blocked_
     if current_state != target_state:
         changes.append(f"state:{current_state}->{target_state}")
 
-    current_labels = {l["name"] for l in gh_issue.get("labels", [])}
-    beads_label_prefixes = ("type:", "priority:", "epic:", "blocked", "spec-candidate", "spec-created")
-    current_beads_labels = {l for l in current_labels if any(l.startswith(p) or l == p for p in beads_label_prefixes)}
+    current_labels = {lbl["name"] for lbl in gh_issue.get("labels", [])}
+    beads_label_prefixes = (
+        "type:",
+        "priority:",
+        "epic:",
+        "blocked",
+        "spec-candidate",
+        "spec-created",
+    )
+    current_beads_labels = {
+        name
+        for name in current_labels
+        if any(name.startswith(p) or name == p for p in beads_label_prefixes)
+    }
     if current_beads_labels != target_labels:
         changes.append("labels")
 
@@ -236,7 +276,7 @@ def update_gh_issue(gh_num, issue, gh_issue, dry_run, ext_ref_map=None, blocked_
         return
 
     if dry_run:
-        change_desc = ', '.join(changes)
+        change_desc = ", ".join(changes)
         if target_state == "closed":
             change_desc += " +closing-comment"
         print(f"  would update: #{gh_num} ({change_desc})")
@@ -297,11 +337,7 @@ def main():
         print("No beads issues found.")
         return
 
-    epic_titles = {
-        i["id"]: i["title"]
-        for i in beads_issues
-        if i.get("issue_type") == "epic"
-    }
+    epic_titles = {i["id"]: i["title"] for i in beads_issues if i.get("issue_type") == "epic"}
 
     children_map = {}
     for issue in beads_issues:
@@ -310,7 +346,13 @@ def main():
             children_map.setdefault(parent, []).append(issue)
 
     ext_ref_map, blocked_by_map, blocks_map = build_dependency_maps(beads_issues)
-    dep_args = dict(ext_ref_map=ext_ref_map, blocked_by_map=blocked_by_map, blocks_map=blocks_map, epic_titles=epic_titles, children_map=children_map)
+    dep_args = dict(
+        ext_ref_map=ext_ref_map,
+        blocked_by_map=blocked_by_map,
+        blocks_map=blocks_map,
+        epic_titles=epic_titles,
+        children_map=children_map,
+    )
 
     print(f"Found {len(beads_issues)} beads issue(s), {len(gh_issues)} GitHub issue(s)")
     print("")

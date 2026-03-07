@@ -8,7 +8,7 @@ import json
 import subprocess
 import sys
 
-from lib import get_repo_owner, get_repo_name
+from lib import get_repo_name, get_repo_owner
 
 PROJECT_TITLE = "Ralph-Beads"
 
@@ -72,17 +72,22 @@ def get_owner_id():
 
 def get_repo_id():
     """Get the repository node ID."""
-    data = gql("""
+    data = gql(
+        """
         query($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) { id }
         }
-    """, owner=get_repo_owner(), repo=get_repo_name())
+    """,
+        owner=get_repo_owner(),
+        repo=get_repo_name(),
+    )
     return data["data"]["repository"]["id"] if data else None
 
 
 def find_project():
     """Find an existing project by title, return (project_id, number) or (None, None)."""
-    data = gql("""
+    data = gql(
+        """
         query($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
                 projectsV2(first: 20) {
@@ -90,7 +95,10 @@ def find_project():
                 }
             }
         }
-    """, owner=get_repo_owner(), repo=get_repo_name())
+    """,
+        owner=get_repo_owner(),
+        repo=get_repo_name(),
+    )
     if not data:
         return None, None
     for p in data["data"]["repository"]["projectsV2"]["nodes"]:
@@ -104,13 +112,17 @@ def create_project():
     owner_id = get_owner_id()
     if not owner_id:
         return None, None
-    data = gql("""
+    data = gql(
+        """
         mutation($ownerId: ID!, $title: String!) {
             createProjectV2(input: {ownerId: $ownerId, title: $title}) {
                 projectV2 { id title number }
             }
         }
-    """, ownerId=owner_id, title=PROJECT_TITLE)
+    """,
+        ownerId=owner_id,
+        title=PROJECT_TITLE,
+    )
     if not data:
         return None, None
     p = data["data"]["createProjectV2"]["projectV2"]
@@ -122,18 +134,23 @@ def link_project_to_repo(project_id):
     repo_id = get_repo_id()
     if not repo_id:
         return
-    gql("""
+    gql(
+        """
         mutation($projectId: ID!, $repositoryId: ID!) {
             linkProjectV2ToRepository(input: {
                 projectId: $projectId, repositoryId: $repositoryId
             }) { repository { nameWithOwner } }
         }
-    """, projectId=project_id, repositoryId=repo_id)
+    """,
+        projectId=project_id,
+        repositoryId=repo_id,
+    )
 
 
 def get_project_fields(project_id):
     """Get all fields on the project, return dict keyed by field name."""
-    data = gql("""
+    data = gql(
+        """
         query($projectId: ID!) {
             node(id: $projectId) {
                 ... on ProjectV2 {
@@ -150,7 +167,9 @@ def get_project_fields(project_id):
                 }
             }
         }
-    """, projectId=project_id)
+    """,
+        projectId=project_id,
+    )
     if not data:
         return {}
     fields = {}
@@ -166,7 +185,8 @@ def create_single_select_field(project_id, name, options):
         f'{{name: "{o["name"]}", color: {o["color"]}, description: "{o["description"]}"}}'
         for o in options
     )
-    data = gql(f"""
+    data = gql(
+        f"""
         mutation($projectId: ID!) {{
             createProjectV2Field(input: {{
                 projectId: $projectId
@@ -181,7 +201,9 @@ def create_single_select_field(project_id, name, options):
                 }}
             }}
         }}
-    """, projectId=project_id)
+    """,
+        projectId=project_id,
+    )
     if data:
         return data["data"]["createProjectV2Field"]["projectV2Field"]
     return None
@@ -193,7 +215,8 @@ def update_status_options(field_id):
         f'{{name: "{o["name"]}", color: {o["color"]}, description: "{o["description"]}"}}'
         for o in STATUS_OPTIONS
     )
-    gql(f"""
+    gql(
+        f"""
         mutation($fieldId: ID!) {{
             updateProjectV2Field(input: {{
                 fieldId: $fieldId
@@ -206,7 +229,9 @@ def update_status_options(field_id):
                 }}
             }}
         }}
-    """, fieldId=field_id)
+    """,
+        fieldId=field_id,
+    )
 
 
 def setup_project(dry_run):
@@ -271,7 +296,8 @@ def get_project_items(project_id):
     cursor = None
     while True:
         after = f', after: "{cursor}"' if cursor else ""
-        data = gql(f"""
+        data = gql(
+            f"""
             query($projectId: ID!) {{
                 node(id: $projectId) {{
                     ... on ProjectV2 {{
@@ -296,7 +322,9 @@ def get_project_items(project_id):
                     }}
                 }}
             }}
-        """, projectId=project_id)
+        """,
+            projectId=project_id,
+        )
         if not data:
             break
         item_data = data["data"]["node"]["items"]
@@ -323,7 +351,8 @@ def get_project_items(project_id):
 
 def add_issue_to_project(project_id, issue_node_id):
     """Add an issue to the project. Returns the item ID."""
-    data = gql("""
+    data = gql(
+        """
         mutation($projectId: ID!, $contentId: ID!) {
             addProjectV2ItemById(input: {
                 projectId: $projectId, contentId: $contentId
@@ -331,7 +360,10 @@ def add_issue_to_project(project_id, issue_node_id):
                 item { id }
             }
         }
-    """, projectId=project_id, contentId=issue_node_id)
+    """,
+        projectId=project_id,
+        contentId=issue_node_id,
+    )
     if data:
         return data["data"]["addProjectV2ItemById"]["item"]["id"]
     return None
@@ -339,7 +371,8 @@ def add_issue_to_project(project_id, issue_node_id):
 
 def set_field_value(project_id, item_id, field_id, option_id):
     """Set a single-select field value on a project item."""
-    gql("""
+    gql(
+        """
         mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
             updateProjectV2ItemFieldValue(input: {
                 projectId: $projectId
@@ -350,7 +383,12 @@ def set_field_value(project_id, item_id, field_id, option_id):
                 projectV2Item { id }
             }
         }
-    """, projectId=project_id, itemId=item_id, fieldId=field_id, optionId=option_id)
+    """,
+        projectId=project_id,
+        itemId=item_id,
+        fieldId=field_id,
+        optionId=option_id,
+    )
 
 
 def get_option_id(fields, field_name, option_name):
@@ -378,9 +416,9 @@ def beads_to_status(issue):
 def get_gh_issue_node_ids():
     """Get GitHub issue node IDs keyed by issue number."""
     result = subprocess.run(
-        ["gh", "issue", "list", "--state", "all", "--limit", "1000",
-         "--json", "number,id"],
-        capture_output=True, text=True
+        ["gh", "issue", "list", "--state", "all", "--limit", "1000", "--json", "number,id"],
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         return {}
@@ -393,8 +431,7 @@ def sync_issues_to_board(project_id, fields, dry_run):
     beads_issues = []
     for status in ("open", "in_progress", "closed"):
         result = subprocess.run(
-            ["bd", "list", "--status", status, "--json"],
-            capture_output=True, text=True
+            ["bd", "list", "--status", status, "--json"], capture_output=True, text=True
         )
         if result.returncode == 0 and result.stdout.strip():
             beads_issues.extend(json.loads(result.stdout))

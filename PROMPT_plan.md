@@ -1,4 +1,4 @@
-# Ralph-Beads: Planning Mode
+# Purser: Planning Mode
 
 You are an autonomous planning agent. Your job is to analyze requirements and
 create a dependency-aware task graph using beads (`bd`).

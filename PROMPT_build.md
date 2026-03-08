@@ -125,7 +125,7 @@ gh issue comment <github-issue-number> --body "Implemented in $(git rev-parse --
 
 ## 999: Critical Guardrails
 
-- Do NOT modify `loop.sh`, `PROMPT_plan.md`, `PROMPT_build.md`, or agent config files
+- Do NOT modify `scripts/loop.py`, `PROMPT_plan.md`, `PROMPT_build.md`, or agent config files
 - Do NOT delete or reorganize beads issues
 - Do NOT work on blocked issues — `bd ready` is the source of truth
 - Do NOT attempt multiple tasks — implement one, close it, exit

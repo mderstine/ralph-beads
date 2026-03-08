@@ -18,7 +18,7 @@ and tuning when it drifts.
 
 Two concepts combine:
 
-**The Ralph Loop** runs Claude Code in a bash `while` loop. Each iteration gets
+**The Ralph Loop** runs Claude Code in a Python loop. Each iteration gets
 fresh context (no hallucination buildup), implements one task, commits, and exits.
 The loop restarts for the next task.
 
@@ -40,13 +40,13 @@ flowchart TB
         review["Review & intervene<br/>via bd CLI"]
     end
 
-    subgraph PlanLoop["Plan Loop  — ./loop.sh plan"]
+    subgraph PlanLoop["Plan Loop  — uv run purser-loop plan"]
         plan_read["Read specs/"]
         plan_create["Create beads<br/>task graph (DAG)"]
         plan_read --> plan_create
     end
 
-    subgraph BuildLoop["Build Loop  — ./loop.sh"]
+    subgraph BuildLoop["Build Loop  — uv run purser-loop"]
         bd_ready["bd ready<br/>(pick unblocked task)"]
         claim["bd update --claim"]
         implement["Implement"]
@@ -74,10 +74,10 @@ flowchart TB
     bd_close --> issues
 
     commit --> gh_commits
-    issues -->|"./loop.sh sync"| gh_issues
+    issues -->|"uv run purser-loop sync"| gh_issues
     gh_issues -->|"closing comment<br/>+ commit SHA"| gh_commits
 
-    gh_triage -->|"./loop.sh triage"| specs
+    gh_triage -->|"uv run purser-loop triage"| specs
     review -.->|"bd update<br/>bd create<br/>bd dep add"| issues
 ```
 
@@ -117,13 +117,13 @@ with tests/lint, commits, closes the issue, and exits. The loop restarts with fr
 context. Works entirely offline — no GitHub, no network required.
 
 **L1 — GitHub Repo** (`specs/github-repo-integration.md`): Optional bidirectional
-sync between beads and GitHub Issues. `./loop.sh sync` pushes beads state to GitHub;
-`./loop.sh triage` pulls `spec-candidate` GitHub Issues into `specs/`. Changelog and
+sync between beads and GitHub Issues. `uv run purser-loop sync` pushes beads state to GitHub;
+`uv run purser-loop triage` pulls `spec-candidate` GitHub Issues into `specs/`. Changelog and
 PR body generation from closed beads issues. All via `gh` CLI.
 
 **L2 — GitHub Projects** (`specs/github-projects-integration.md`): Optional kanban
 board sync. Beads statuses map to Project columns (Backlog → Ready → In Progress →
-Done). Runs as part of `./loop.sh sync` after issue sync. Requires L1.
+Done). Runs as part of `uv run purser-loop sync` after issue sync. Requires L1.
 
 ## Prerequisites
 
@@ -230,7 +230,7 @@ Also update the validation commands in `PROMPT_build.md` Phase 3 to match.
 ### 4. Run the Planning Loop
 
 ```bash
-./loop.sh plan
+uv run purser-loop plan
 ```
 
 This reads your specs and creates a dependency-aware task graph in beads. After it
@@ -242,13 +242,13 @@ bd ready                  # See what's unblocked and ready to build
 bd dep tree <epic-id>     # Visualize dependency structure
 ```
 
-**If the plan doesn't look right**, edit your specs and run `./loop.sh plan` again.
+**If the plan doesn't look right**, edit your specs and run `uv run purser-loop plan` again.
 Planning iterations are cheap — the agent doesn't write code in this mode.
 
 ### 5. Run the Build Loop
 
 ```bash
-./loop.sh
+uv run purser-loop
 ```
 
 The agent will:
@@ -269,15 +269,15 @@ The agent will:
 gh auth status
 
 # Bootstrap labels on your GitHub repo
-./scripts/gh-labels.sh
+uv run python3 scripts/gh_labels.py
 
 # Sync beads issues → GitHub Issues (preview first)
-./loop.sh sync --dry-run
-./loop.sh sync
+uv run purser-loop sync --dry-run
+uv run purser-loop sync
 
 # Triage spec-candidate GitHub Issues → specs/ (preview first)
-./loop.sh triage --dry-run
-./loop.sh triage
+uv run purser-loop triage --dry-run
+uv run purser-loop triage
 ```
 
 ### 7. Enable Project Board (L2, optional)
@@ -285,8 +285,8 @@ gh auth status
 ```bash
 # Sync issues to a GitHub Project board
 # (creates the project if one doesn't exist)
-./scripts/gh-project.sh --dry-run
-./scripts/gh-project.sh
+uv run python3 scripts/gh_project.py --dry-run
+uv run python3 scripts/gh_project.py
 ```
 
 ## How You Direct It
@@ -324,9 +324,9 @@ You are the director, not the coder. Here's how you steer:
 | **Review what was built** | `git log --oneline` |
 | **Check remaining work** | `bd list --status open` |
 | **Find what's blocked** | `bd list --status open` then `bd dep tree <id>` |
-| **Add more specs** | Write new `specs/*.md`, run `./loop.sh plan` again |
-| **Sync to GitHub** | `./loop.sh sync` (or `--dry-run` to preview) |
-| **Triage GitHub Issues** | `./loop.sh triage` (converts `spec-candidate` issues to specs) |
+| **Add more specs** | Write new `specs/*.md`, run `uv run purser-loop plan` again |
+| **Sync to GitHub** | `uv run purser-loop sync` (or `--dry-run` to preview) |
+| **Triage GitHub Issues** | `uv run purser-loop triage` (converts `spec-candidate` issues to specs) |
 | **Re-plan from scratch** | Close all issues, write new specs, re-plan |
 
 ### Tuning the Agent's Behavior
@@ -358,16 +358,16 @@ Write tests manually if needed to raise the quality bar.
 | Task graph has wrong ordering | `bd dep add/remove` to fix dependencies |
 | Agent works on low-priority stuff | `bd update <id> --priority 0` on the important task |
 | Agent discovers too much side work | Add "minimize discovered issues" to `PROMPT_build.md` |
-| Plan is stale | Re-run `./loop.sh plan` (cheap — no code changes) |
+| Plan is stale | Re-run `uv run purser-loop plan` (cheap — no code changes) |
 
 ## Architecture (L0 Core)
 
 ```
 ┌───────────────────────────────────────────────────────┐
-│                      loop.sh                          │
-│  while true; do                                       │
-│      cat PROMPT_build.md | claude -p                  │
-│  done                                                 │
+│                    purser-loop                         │
+│  while True:                                          │
+│      claude -p < PROMPT_build.md                      │
+│                                                       │
 └────────────┬──────────────────────────────┬───────────┘
              │                              │
              ▼                              ▼
@@ -429,14 +429,17 @@ The agent lives in the middle, squeezed into producing correct code.
 
 ```
 purser/
-├── loop.sh              # Ralph Loop orchestrator
+├── loop.sh              # Ralph Loop orchestrator (legacy bash wrapper)
+├── init.sh              # Project init (legacy bash wrapper)
 ├── PROMPT_plan.md       # Planning mode prompt
 ├── PROMPT_build.md      # Build mode prompt
 ├── AGENTS.md            # Operational guide (loaded every iteration)
 ├── CLAUDE.md            # Claude Code project instructions
 ├── specs/               # YOUR requirements (one per topic of concern)
 │   └── *.md
-├── scripts/             # GitHub integration scripts
+├── scripts/             # Python scripts (loop, init, GitHub integration)
+│   ├── loop.py          # Ralph Loop orchestrator (purser-loop entry point)
+│   ├── init.py          # Project initialization (purser-init entry point)
 ├── .claude/             # Claude Code adapter
 │   └── commands/        # Slash commands (/build, /plan, /status, etc.)
 │       └── *.md
@@ -465,10 +468,10 @@ Run multiple agents in parallel. Beads prevents conflicts via atomic claiming:
 
 ```bash
 # Terminal 1
-BD_ACTOR=agent-1 ./loop.sh
+BD_ACTOR=agent-1 uv run purser-loop
 
 # Terminal 2
-BD_ACTOR=agent-2 ./loop.sh
+BD_ACTOR=agent-2 uv run purser-loop
 ```
 
 Each agent will claim different tasks. If agent-1 claims task A, agent-2 skips it
@@ -480,11 +483,11 @@ The framework is agent-neutral — the core protocol (specs → plan → build �
 works with any AI agent that can run shell commands. This repo ships with adapter
 files for two agents:
 
-- **Claude Code** — uses `loop.sh` + `.claude/commands/` for the full Ralph Loop
+- **Claude Code** — uses `purser-loop` + `.claude/commands/` for the full Ralph Loop
 - **VS Code Copilot** — uses `.github/agents/` and `.github/skills/` for agent mode
 
 If you use GitHub Copilot in VS Code, agent definitions and skills encode the
-purser workflow natively — no `loop.sh` required.
+purser workflow natively — no `purser-loop` required.
 
 ### Prerequisites
 
@@ -516,7 +519,7 @@ The Ralph Loop (`while :; do claude -p; done`) becomes **repeated agent invocati
 
 | Ralph Loop | VS Code Agent Mode |
 |------------|-------------------|
-| `loop.sh` iterates automatically | You invoke `@beads-dev` per task |
+| `purser-loop` iterates automatically | You invoke `@beads-dev` per task |
 | Fresh context each iteration | Agent mode provides session isolation |
 | `bd ready` picks next task | `@beads-dev` calls `bd ready` itself |
 | One-task-per-iteration discipline | Enforced by `beads-dev` agent rules |
@@ -575,7 +578,7 @@ Copilot chat session.
 
 | Term | Meaning |
 |------|---------|
-| **Ralph Loop** | Bash `while` loop feeding prompts to Claude Code |
+| **Ralph Loop** | Python loop feeding prompts to Claude Code |
 | **Beads** | Git-backed dependency-aware issue tracker (`bd` CLI) |
 | **Spec** | Requirements document in `specs/` — one per topic of concern |
 | **Topic of concern** | A distinct project aspect describable in one sentence |

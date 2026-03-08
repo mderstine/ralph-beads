@@ -143,7 +143,7 @@ def _run_status() -> None:
     """Print iteration stats from logs/summary.jsonl."""
     summary_file = REPO_ROOT / "logs" / "summary.jsonl"
     if not summary_file.exists():
-        print("No iteration logs found. Run ./loop.sh to generate logs.")
+        print("No iteration logs found. Run 'uv run purser-loop' to generate logs.")
         return
 
     entries = []
@@ -386,7 +386,7 @@ def main(argv: list[str] | None = None) -> None:
             if ready_count == 0:
                 print("No ready work found. All tasks complete or blocked.")
                 print(
-                    "Run './loop.sh plan' to generate new tasks, "
+                    "Run 'uv run purser-loop plan' to generate new tasks, "
                     "or check blockers with 'bd list --status open'."
                 )
                 break

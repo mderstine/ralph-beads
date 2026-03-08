@@ -6,7 +6,7 @@ with Beads (`bd`) dependency-aware issue tracking.
 ## How It Works
 
 ```
-loop.sh → PROMPT.md → Claude Code → bd ready → implement → bd close → git commit → loop restarts
+purser-loop → PROMPT.md → Claude Code → bd ready → implement → bd close → git commit → loop restarts
 ```
 
 Each iteration gets fresh context. Beads replaces IMPLEMENTATION_PLAN.md as the
@@ -28,18 +28,18 @@ New to this project? Run `/init` (Claude Code slash command) to bootstrap the pr
 - Sets up GitHub remote, Project board, and labels
 - Saves configuration to `.purser.yml`
 
-Or run `./init.sh` directly from the terminal.
+Or run `uv run purser-init` directly from the terminal.
 
 ## Key Commands
 
 ```bash
-./loop.sh              # Build mode (default)
-./loop.sh plan         # Planning mode (specs → task graph)
-./loop.sh plan 5       # Planning mode, max 5 iterations
-./loop.sh 20           # Build mode, max 20 iterations
-./loop.sh status       # Print iteration stats from logs/summary.jsonl
-./loop.sh sync         # Sync beads issues to GitHub Issues/Project board
-./loop.sh triage       # Triage spec-candidate GitHub Issues into specs/
+uv run purser-loop              # Build mode (default)
+uv run purser-loop plan         # Planning mode (specs → task graph)
+uv run purser-loop plan 5       # Planning mode, max 5 iterations
+uv run purser-loop 20           # Build mode, max 20 iterations
+uv run purser-loop status       # Print iteration stats from logs/summary.jsonl
+uv run purser-loop sync         # Sync beads issues to GitHub Issues/Project board
+uv run purser-loop triage       # Triage spec-candidate GitHub Issues into specs/
 ```
 
 Both `sync` and `triage` support `--dry-run` for preview.
@@ -49,9 +49,10 @@ Both `sync` and `triage` support `--dry-run` for preview.
 - `PROMPT_plan.md` — Planning mode prompt (specs → beads issues)
 - `PROMPT_build.md` — Build mode prompt (bd ready → implement → close)
 - `AGENTS.md` — Operational guide loaded every iteration
-- `loop.sh` — The Ralph Loop orchestrator
+- `scripts/loop.py` — The Ralph Loop orchestrator (`uv run purser-loop`)
+- `scripts/init.py` — Project initialization (`uv run purser-init`)
 - `specs/` — User's requirements documents (one per topic of concern)
-- `scripts/` — GitHub integration scripts (gh-sync.sh, gh-triage.sh, gh-project.sh, gh-labels.sh)
+- `scripts/` — Python scripts for GitHub integration and CLI entry points
 - `.beads/` — Beads database (managed by bd, don't edit)
 
 ## Rules

@@ -8,8 +8,12 @@ import json
 import sys
 from collections import defaultdict
 from datetime import UTC, datetime
+from pathlib import Path
 
-from lib import get_commit_for_issue, get_repo_url, run
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from cli_utils import require_commands  # noqa: E402
+from lib import get_commit_for_issue, get_repo_url, run  # noqa: E402
 
 
 def parse_args(argv):
@@ -155,6 +159,13 @@ def format_changelog(issues, repo_url=None):
 
 
 def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print("Usage: gh_changelog.py [--since YYYY-MM-DD] [--output FILE] [--dry-run]")
+        print("Generate a changelog from closed beads issues.")
+        return
+
+    require_commands(["bd"])
+
     args = parse_args(sys.argv[1:])
 
     issues = get_closed_issues(since=args["since"])

@@ -7,8 +7,12 @@ In Progress, Done) and custom fields (Priority, Type).
 import json
 import subprocess
 import sys
+from pathlib import Path
 
-from lib import get_repo_name, get_repo_owner
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from cli_utils import require_commands, require_gh_auth  # noqa: E402
+from lib import get_repo_name, get_repo_owner  # noqa: E402
 
 PROJECT_TITLE = "Purser"
 
@@ -547,7 +551,32 @@ def sync_issues_to_board(project_id, fields, dry_run):
     print(f"\nBoard sync: {added} added, {updated} updated")
 
 
+def check_project_scopes():
+    """Verify gh token has project scopes."""
+    result = subprocess.run(
+        ["gh", "api", "graphql", "-f", "query={ viewer { projectsV2(first:1) { totalCount } } }"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print("Error: gh token lacks project scopes. Run:")
+        print("  gh auth refresh -h github.com -s read:project,project")
+        sys.exit(1)
+
+
 def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print("Usage: gh_project.py [--dry-run] [--setup]")
+        print("Manage GitHub Projects v2 board for beads issues.")
+        print()
+        print("  --dry-run  Preview without making changes")
+        print("  --setup    Create/configure project only (no issue sync)")
+        return
+
+    require_commands(["gh", "bd"])
+    require_gh_auth()
+    check_project_scopes()
+
     args = parse_args(sys.argv[1:])
     dry_run = args["dry_run"]
     setup_only = args["setup_only"]

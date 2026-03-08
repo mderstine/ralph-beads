@@ -1,0 +1,505 @@
+#!/usr/bin/env python3
+"""Purser Loop: Autonomous AI development with dependency-aware task tracking.
+
+Cross-platform Python equivalent of loop.sh. Uses only Python stdlib.
+
+Usage:
+    python3 scripts/loop.py              # Build mode, unlimited iterations
+    python3 scripts/loop.py 20           # Build mode, max 20 iterations
+    python3 scripts/loop.py plan         # Planning mode, unlimited
+    python3 scripts/loop.py plan 5       # Planning mode, max 5 iterations
+    python3 scripts/loop.py status       # Print iteration stats from logs/summary.jsonl
+    python3 scripts/loop.py sync         # Sync beads issues to GitHub (single-shot)
+    python3 scripts/loop.py triage       # Triage spec-candidate GitHub Issues (single-shot)
+    python3 scripts/loop.py changelog    # Generate changelog from closed issues (single-shot)
+
+Timeout:
+    --timeout=VALUE         # Override per-iteration timeout in seconds (e.g. 900)
+    PURSER_TIMEOUT=VALUE    # Same via environment variable
+    Defaults: build=900s (15m), plan=600s (10m)
+"""
+
+import contextlib
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+
+# ─── Constants ───────────────────────────────────────────────────────────────
+
+SIGNAL_GRACE = 30  # Seconds to wait for Claude to exit before force-kill
+TIMEOUT_BUILD_DEFAULT = 900  # 15 minutes
+TIMEOUT_PLAN_DEFAULT = 600  # 10 minutes
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPTS_DIR.parent
+
+# ─── Global state ────────────────────────────────────────────────────────────
+
+_claude_proc: subprocess.Popen | None = None
+_shutdown_requested = False
+_iteration = 0
+
+
+# ─── Signal handling ─────────────────────────────────────────────────────────
+
+
+def _print_summary() -> None:
+    print()
+    print(f"=== Loop finished after {_iteration} iteration(s) ===")
+    with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
+        subprocess.run(["bd", "prime"], capture_output=True, timeout=10)
+
+
+def _terminate_process(proc: subprocess.Popen) -> None:
+    """Terminate a subprocess tree, with grace period then force-kill."""
+    # Try graceful termination
+    try:
+        if sys.platform != "win32":
+            # Kill the entire process group on Unix
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        else:
+            proc.terminate()
+    except (ProcessLookupError, OSError):
+        return
+
+    # Wait for grace period
+    try:
+        proc.wait(timeout=SIGNAL_GRACE)
+        print("Claude exited cleanly.")
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    # Force kill
+    print("Grace period expired. Force-killing Claude...")
+    try:
+        if sys.platform != "win32":
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        else:
+            proc.kill()
+    except (ProcessLookupError, OSError):
+        pass
+
+
+def _signal_handler(signum: int, _frame: object) -> None:
+    global _shutdown_requested
+    _shutdown_requested = True
+    sig_name = signal.Signals(signum).name
+    print()
+    print(f"=== Signal received ({sig_name}). Shutting down gracefully... ===")
+
+    if _claude_proc is not None and _claude_proc.poll() is None:
+        print(f"Waiting for Claude (PID {_claude_proc.pid}) to exit (grace: {SIGNAL_GRACE}s)...")
+        _terminate_process(_claude_proc)
+
+    _print_summary()
+    sys.exit(130)
+
+
+# ─── Argument parsing ────────────────────────────────────────────────────────
+
+
+def _parse_args(argv: list[str]) -> tuple[str, int, str, list[str]]:
+    """Parse CLI arguments.
+
+    Returns: (mode, max_iterations, timeout_override, passthrough_args)
+    """
+    mode = "build"
+    max_iterations = 0
+    timeout_override = ""
+    passthrough_args: list[str] = []
+
+    for arg in argv:
+        if arg == "plan":
+            mode = "plan"
+        elif arg == "status":
+            mode = "status"
+        elif arg == "sync":
+            mode = "sync"
+        elif arg == "triage":
+            mode = "triage"
+        elif arg == "changelog":
+            mode = "changelog"
+        elif arg == "--dry-run":
+            passthrough_args.append(arg)
+        elif arg.startswith("--timeout="):
+            timeout_override = arg.split("=", 1)[1]
+        elif arg.isdigit():
+            max_iterations = int(arg)
+
+    return mode, max_iterations, timeout_override, passthrough_args
+
+
+# ─── Single-shot modes ───────────────────────────────────────────────────────
+
+
+def _run_status() -> None:
+    """Print iteration stats from logs/summary.jsonl."""
+    summary_file = REPO_ROOT / "logs" / "summary.jsonl"
+    if not summary_file.exists():
+        print("No iteration logs found. Run ./loop.sh to generate logs.")
+        return
+
+    entries = []
+    for line in summary_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            entries.append(json.loads(line))
+
+    if not entries:
+        print("No iteration data found.")
+        return
+
+    total = len(entries)
+    success = sum(1 for e in entries if e.get("outcome") == "success")
+    fail = sum(1 for e in entries if e.get("outcome") == "error")
+    timeout = sum(1 for e in entries if e.get("outcome") == "timeout")
+    durations = [e.get("duration_s", 0) for e in entries]
+    avg_dur = sum(durations) / len(durations) if durations else 0
+    rate = (success / total * 100) if total else 0
+
+    print("=== Purser Iteration Stats ===")
+    print()
+    print(f"  Total iterations:  {total}")
+    print(f"  Success:           {success}")
+    print(f"  Errors:            {fail}")
+    print(f"  Timeouts:          {timeout}")
+    print(f"  Success rate:      {rate:.0f}%")
+    print(f"  Avg duration:      {avg_dur:.0f}s")
+    print()
+    print("--- Last 5 iterations ---")
+    print(f"{'#':<5} {'Mode':<8} {'Outcome':<10} {'Duration':<10} {'Beads Issue':<20} {'Started'}")
+    print(f"{'─' * 5} {'─' * 8} {'─' * 10} {'─' * 10} {'─' * 20} {'─' * 20}")
+    for e in entries[-5:]:
+        dur = f"{e.get('duration_s', 0)}s"
+        print(
+            f"{e.get('iteration', '?'):<5} "
+            f"{e.get('mode', '?'):<8} "
+            f"{e.get('outcome', '?'):<10} "
+            f"{dur:<10} "
+            f"{e.get('beads_issue_id', ''):<20} "
+            f"{e.get('start_time', '?')}"
+        )
+
+
+def _run_delegate(mode: str, passthrough_args: list[str]) -> None:
+    """Delegate to a shell script for single-shot modes."""
+    script_map = {
+        "sync": "gh-sync.sh",
+        "triage": "gh-triage.sh",
+        "changelog": "gh-changelog.sh",
+    }
+    script = SCRIPTS_DIR / script_map[mode]
+    label = {"sync": "GitHub Sync", "triage": "Issue Triage", "changelog": "Changelog"}[mode]
+    print(f"=== Purser: {label} ===")
+    result = subprocess.run([str(script), *passthrough_args])
+    sys.exit(result.returncode)
+
+
+# ─── Pre-flight checks ───────────────────────────────────────────────────────
+
+
+def _preflight_checks() -> None:
+    """Run pre-flight checks. Exits on fatal errors, warns on non-fatal issues."""
+    errors = 0
+
+    # 1. bd CLI available
+    if shutil.which("bd") is None:
+        print("ERROR: bd (beads) CLI not found. Install with: npm install -g @beads/bd")
+        errors += 1
+
+    # 2. claude CLI available
+    if shutil.which("claude") is None:
+        print("ERROR: claude CLI not found. Install Claude Code to continue.")
+        errors += 1
+
+    # 3. beads database accessible
+    if errors == 0:
+        try:
+            result = subprocess.run(["bd", "prime"], capture_output=True, text=True, timeout=15)
+            if result.returncode != 0:
+                print("ERROR: bd prime failed — beads database may be corrupted or inaccessible.")
+                print("       Run 'bd prime' manually to see the error.")
+                errors += 1
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            print("ERROR: bd prime failed — could not execute bd command.")
+            errors += 1
+
+    if errors > 0:
+        print()
+        print(f"Pre-flight failed with {errors} error(s). Fix the issues above and retry.")
+        sys.exit(1)
+
+    # 4. Warn if on main/master branch (non-fatal)
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        branch = result.stdout.strip() if result.returncode == 0 else "unknown"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        branch = "unknown"
+
+    if branch in ("main", "master"):
+        print(f"WARNING: Running on '{branch}' branch. Consider working on a feature branch.")
+
+    # 5. Warn about uncommitted changes (non-fatal)
+    try:
+        diff_result = subprocess.run(["git", "diff", "--quiet"], capture_output=True, timeout=5)
+        cached_result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"], capture_output=True, timeout=5
+        )
+        if diff_result.returncode != 0 or cached_result.returncode != 0:
+            print("WARNING: Uncommitted changes detected — these may conflict with loop commits:")
+            status = subprocess.run(
+                ["git", "status", "--short"], capture_output=True, text=True, timeout=5
+            )
+            if status.returncode == 0:
+                for line in status.stdout.splitlines()[:10]:
+                    print(f"  {line}")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+
+# ─── Beads helpers ────────────────────────────────────────────────────────────
+
+
+def _get_closed_issue_ids() -> set[str]:
+    """Get the set of currently-closed beads issue IDs."""
+    try:
+        result = subprocess.run(
+            ["bd", "list", "--status", "closed", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            issues = json.loads(result.stdout)
+            return {i["id"] for i in issues}
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        pass
+    return set()
+
+
+def _get_ready_count() -> int:
+    """Get the count of ready (unblocked) beads issues."""
+    try:
+        result = subprocess.run(
+            ["bd", "ready", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return len(json.loads(result.stdout))
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        pass
+    return 0
+
+
+# ─── Main loop ────────────────────────────────────────────────────────────────
+
+
+def main(argv: list[str] | None = None) -> None:
+    global _claude_proc, _shutdown_requested, _iteration
+
+    if argv is None:
+        argv = sys.argv[1:]
+
+    mode, max_iterations, timeout_override, passthrough_args = _parse_args(argv)
+
+    # Install signal handlers (Unix only — Windows doesn't support SIGTERM handler well)
+    signal.signal(signal.SIGINT, _signal_handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _signal_handler)
+
+    # ─── Single-shot modes ───────────────────────────────────────────────
+    if mode == "status":
+        _run_status()
+        return
+
+    if mode in ("sync", "triage", "changelog"):
+        _run_delegate(mode, passthrough_args)
+        return
+
+    # ─── Resolve timeout ─────────────────────────────────────────────────
+    if timeout_override:
+        iter_timeout = int(timeout_override)
+    else:
+        env_timeout = os.environ.get("PURSER_TIMEOUT")
+        if env_timeout:
+            iter_timeout = int(env_timeout)
+        elif mode == "plan":
+            iter_timeout = TIMEOUT_PLAN_DEFAULT
+        else:
+            iter_timeout = TIMEOUT_BUILD_DEFAULT
+
+    prompt_file = REPO_ROOT / f"PROMPT_{mode}.md"
+    if not prompt_file.exists():
+        print(f"Error: {prompt_file.name} not found")
+        sys.exit(1)
+
+    # ─── Pre-flight ──────────────────────────────────────────────────────
+    _preflight_checks()
+
+    print("=== Purser Loop ===")
+    print(f"Mode: {mode}")
+    print(f"Prompt: {prompt_file.name}")
+    print(f"Max iterations: {max_iterations or 'unlimited'}")
+    print(f"Iteration timeout: {iter_timeout}s")
+    print("========================")
+
+    # Ensure logs directory exists
+    logs_dir = REPO_ROOT / "logs"
+    logs_dir.mkdir(exist_ok=True)
+
+    # ─── Loop ────────────────────────────────────────────────────────────
+    while True:
+        _iteration += 1
+
+        if max_iterations > 0 and _iteration > max_iterations:
+            print(f"Reached max iterations ({max_iterations}). Stopping.")
+            break
+
+        if _shutdown_requested:
+            break
+
+        # Capture iteration start time
+        iter_start = time.time()
+        start_time = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        log_file = logs_dir / f"{mode}-{start_time}-iter-{_iteration}.log"
+
+        print()
+        print(f"--- Iteration {_iteration} ({start_time}) ---")
+
+        # Check if there's work to do (build mode only)
+        if mode == "build":
+            ready_count = _get_ready_count()
+            if ready_count == 0:
+                print("No ready work found. All tasks complete or blocked.")
+                print(
+                    "Run './loop.sh plan' to generate new tasks, "
+                    "or check blockers with 'bd list --status open'."
+                )
+                break
+            print(f"Ready work: {ready_count} issue(s)")
+
+        # Snapshot closed issues before this iteration
+        closed_before = _get_closed_issue_ids()
+
+        # Run Claude with timeout
+        prompt_content = prompt_file.read_text(encoding="utf-8")
+        claude_cmd = [
+            "claude",
+            "-p",
+            "--output-format=stream-json",
+            "--verbose",
+            "--model",
+            "opus",
+        ]
+
+        exit_code = 1
+        timed_out = False
+        try:
+            # Create process group on Unix for clean group termination
+            kwargs: dict = {}
+            if sys.platform != "win32":
+                kwargs["start_new_session"] = True
+
+            with open(log_file, "w", encoding="utf-8") as log_fh:
+                _claude_proc = subprocess.Popen(
+                    claude_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=log_fh,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    **kwargs,
+                )
+                # Feed the prompt via stdin
+                try:
+                    if _claude_proc.stdin is not None:
+                        _claude_proc.stdin.write(prompt_content)
+                        _claude_proc.stdin.close()
+                except BrokenPipeError:
+                    pass
+
+                try:
+                    _claude_proc.wait(timeout=iter_timeout)
+                    exit_code = _claude_proc.returncode
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+                    exit_code = 124
+                    _terminate_process(_claude_proc)
+        except FileNotFoundError:
+            print("ERROR: claude CLI not found during execution.")
+            exit_code = 1
+        finally:
+            _claude_proc = None
+
+        # Compute duration and outcome
+        duration = int(time.time() - iter_start)
+        if timed_out:
+            outcome = "timeout"
+        elif exit_code == 0:
+            outcome = "success"
+        else:
+            outcome = "error"
+
+        # Detect which beads issue was closed during this iteration
+        closed_after = _get_closed_issue_ids()
+        newly_closed = closed_after - closed_before
+        beads_issue_id = ",".join(sorted(newly_closed))
+
+        # Append JSON summary line to logs/summary.jsonl
+        summary_entry = {
+            "iteration": _iteration,
+            "mode": mode,
+            "start_time": start_time,
+            "duration_s": duration,
+            "exit_code": exit_code,
+            "beads_issue_id": beads_issue_id,
+            "outcome": outcome,
+            "log_file": str(log_file),
+        }
+        summary_file = logs_dir / "summary.jsonl"
+        try:
+            with open(summary_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(summary_entry) + "\n")
+        except OSError:
+            pass
+
+        if _shutdown_requested:
+            break
+
+        if timed_out:
+            print()
+            print(f"!!! TIMEOUT: Iteration {_iteration} exceeded {iter_timeout}s limit !!!")
+            print("The claimed beads issue has been left in_progress for retry.")
+            print("Press Enter to retry or Ctrl+C to stop.")
+            try:
+                input()
+            except (EOFError, KeyboardInterrupt):
+                break
+        elif exit_code != 0:
+            print(f"Claude exited with code {exit_code}. Pausing for review.")
+            print("Press Enter to continue or Ctrl+C to stop.")
+            try:
+                input()
+            except (EOFError, KeyboardInterrupt):
+                break
+
+        print(f"--- Iteration {_iteration} complete ({outcome}, {duration}s) ---")
+
+    _print_summary()
+
+
+if __name__ == "__main__":
+    main()

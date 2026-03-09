@@ -12,8 +12,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config  # noqa: E402
-from cli_utils import require_commands, require_gh_auth  # noqa: E402
+from cli_utils import require_commands, require_gh_auth, setup_logging  # noqa: E402
 from lib import get_repo_name, get_repo_owner  # noqa: E402
+
+logger = setup_logging(__name__)
 
 PROJECT_TITLE = "Purser"
 
@@ -64,7 +66,7 @@ def gql(query, **variables):
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         err = result.stderr.strip()
-        print(f"  GraphQL error: {err}", file=sys.stderr)
+        logger.error("  GraphQL error: %s", err)
         return None
     return json.loads(result.stdout)
 
@@ -244,18 +246,18 @@ def setup_project(dry_run):
     project_id, project_num = find_project()
 
     if project_id:
-        print(f"Found project: {PROJECT_TITLE} (#{project_num})")
+        logger.info("Found project: %s (#%s)", PROJECT_TITLE, project_num)
     else:
         if dry_run:
-            print(f"Would create project: {PROJECT_TITLE}")
+            logger.info("Would create project: %s", PROJECT_TITLE)
             return None, {}
-        print(f"Creating project: {PROJECT_TITLE}")
+        logger.info("Creating project: %s", PROJECT_TITLE)
         project_id, project_num = create_project()
         if not project_id:
-            print("ERROR: Failed to create project")
+            logger.error("Failed to create project")
             return None, {}
         link_project_to_repo(project_id)
-        print(f"  Created and linked to repo (#{project_num})")
+        logger.info("  Created and linked to repo (#%s)", project_num)
 
     fields = get_project_fields(project_id)
 
@@ -264,33 +266,37 @@ def setup_project(dry_run):
         desired_options = {o["name"] for o in STATUS_OPTIONS}
         if existing_options != desired_options:
             if dry_run:
-                print(f"  Would update Status options: {existing_options} -> {desired_options}")
+                logger.info(
+                    "  Would update Status options: %s -> %s",
+                    existing_options,
+                    desired_options,
+                )
             else:
                 update_status_options(fields["Status"]["id"])
-                print("  Updated Status field options")
+                logger.info("  Updated Status field options")
                 fields = get_project_fields(project_id)
         else:
-            print("  Status field: OK")
+            logger.info("  Status field: OK")
 
     if "Priority" not in fields:
         if dry_run:
-            print("  Would create Priority field")
+            logger.info("  Would create Priority field")
         else:
             create_single_select_field(project_id, "Priority", PRIORITY_OPTIONS)
-            print("  Created Priority field")
+            logger.info("  Created Priority field")
             fields = get_project_fields(project_id)
     else:
-        print("  Priority field: OK")
+        logger.info("  Priority field: OK")
 
     if "Type" not in fields:
         if dry_run:
-            print("  Would create Type field")
+            logger.info("  Would create Type field")
         else:
             create_single_select_field(project_id, "Type", TYPE_OPTIONS)
-            print("  Created Type field")
+            logger.info("  Created Type field")
             fields = get_project_fields(project_id)
     else:
-        print("  Type field: OK")
+        logger.info("  Type field: OK")
 
     return project_id, fields
 
@@ -452,10 +458,10 @@ def sync_issues_to_board(project_id, fields, dry_run):
                 pass
 
     if not linked:
-        print("No beads issues linked to GitHub. Run gh_sync.py first.")
+        logger.info("No beads issues linked to GitHub. Run gh_sync.py first.")
         return
 
-    print(f"\nSyncing {len(linked)} linked issue(s) to project board...")
+    logger.info("\nSyncing %d linked issue(s) to project board...", len(linked))
 
     existing_items = get_project_items(project_id)
     gh_node_ids = get_gh_issue_node_ids()
@@ -470,7 +476,7 @@ def sync_issues_to_board(project_id, fields, dry_run):
     for gh_num, issue in linked:
         node_id = gh_node_ids.get(gh_num)
         if not node_id:
-            print(f"  skip: #{gh_num} (not found in GitHub)")
+            logger.info("  skip: #%d (not found in GitHub)", gh_num)
             continue
 
         target_status = beads_to_status(issue)
@@ -496,11 +502,11 @@ def sync_issues_to_board(project_id, fields, dry_run):
                 changes.append(f"type->{target_type}")
 
             if not changes:
-                print(f"  unchanged: #{gh_num} ({issue['id']})")
+                logger.debug("  unchanged: #%d (%s)", gh_num, issue["id"])
                 continue
 
             if dry_run:
-                print(f"  would update: #{gh_num} ({', '.join(changes)})")
+                logger.info("  would update: #%d (%s)", gh_num, ", ".join(changes))
                 continue
 
             if current_status != target_status and status_field_id:
@@ -518,17 +524,17 @@ def sync_issues_to_board(project_id, fields, dry_run):
                 if opt_id:
                     set_field_value(project_id, item_id, type_field_id, opt_id)
 
-            print(f"  updated: #{gh_num} ({', '.join(changes)})")
+            logger.info("  updated: #%d (%s)", gh_num, ", ".join(changes))
             updated += 1
         else:
             if dry_run:
-                print(f"  would add: #{gh_num} ({issue['id']}) [{target_status}]")
+                logger.info("  would add: #%d (%s) [%s]", gh_num, issue["id"], target_status)
                 added += 1
                 continue
 
             item_id = add_issue_to_project(project_id, node_id)
             if not item_id:
-                print(f"  ERROR: failed to add #{gh_num}")
+                logger.error("  failed to add #%d", gh_num)
                 continue
 
             if status_field_id:
@@ -546,10 +552,10 @@ def sync_issues_to_board(project_id, fields, dry_run):
                 if opt_id:
                     set_field_value(project_id, item_id, type_field_id, opt_id)
 
-            print(f"  added: #{gh_num} ({issue['id']}) [{target_status}]")
+            logger.info("  added: #%d (%s) [%s]", gh_num, issue["id"], target_status)
             added += 1
 
-    print(f"\nBoard sync: {added} added, {updated} updated")
+    logger.info("\nBoard sync: %d added, %d updated", added, updated)
 
 
 def check_project_scopes():
@@ -561,8 +567,8 @@ def check_project_scopes():
     )
     if result.returncode != 0:
         host = config.load_config().get("github", {}).get("host", "github.com")
-        print("Error: gh token lacks project scopes. Run:")
-        print(f"  gh auth refresh -h {host} -s read:project,project")
+        logger.error("gh token lacks project scopes. Run:")
+        logger.error("  gh auth refresh -h %s -s read:project,project", host)
         sys.exit(1)
 
 
@@ -583,24 +589,24 @@ def main():
     dry_run = args["dry_run"]
     setup_only = args["setup_only"]
 
-    print("=== GitHub Project Board Sync ===")
+    logger.info("=== GitHub Project Board Sync ===")
     if dry_run:
-        print("(dry-run mode)")
-    print("")
+        logger.info("(dry-run mode)")
+    logger.info("")
 
     project_id, fields = setup_project(dry_run)
     if not project_id and not dry_run:
-        print("ERROR: Could not set up project")
+        logger.error("Could not set up project")
         sys.exit(1)
 
     if setup_only:
-        print("\nSetup complete.")
+        logger.info("\nSetup complete.")
         return
 
     if project_id:
         sync_issues_to_board(project_id, fields, dry_run)
 
-    print("\nDone.")
+    logger.info("\nDone.")
 
 
 if __name__ == "__main__":

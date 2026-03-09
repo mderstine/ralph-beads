@@ -1,5 +1,6 @@
 """Tests for scripts/gh_project.py — GitHub Projects v2 board management."""
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -15,19 +16,22 @@ import gh_project
 class TestCheckProjectScopes:
     """Tests for check_project_scopes() auth hint hostname."""
 
-    def test_uses_default_host_when_no_config(self, tmp_path, capsys):
+    def test_uses_default_host_when_no_config(self, caplog):
         """Auth hint defaults to github.com when no config file exists."""
         fake_result = subprocess.CompletedProcess([], returncode=1, stdout="", stderr="error")
         with (
             patch("gh_project.subprocess.run", return_value=fake_result),
-            patch("gh_project.config.load_config", return_value={"github": {"host": "github.com"}}),
+            patch(
+                "gh_project.config.load_config",
+                return_value={"github": {"host": "github.com"}},
+            ),
             pytest.raises(SystemExit),
+            caplog.at_level(logging.ERROR),
         ):
             gh_project.check_project_scopes()
-        captured = capsys.readouterr()
-        assert "gh auth refresh -h github.com" in captured.out
+        assert "gh auth refresh -h github.com" in caplog.text
 
-    def test_uses_configured_ghe_host(self, capsys):
+    def test_uses_configured_ghe_host(self, caplog):
         """Auth hint uses the configured GHE hostname."""
         fake_result = subprocess.CompletedProcess([], returncode=1, stdout="", stderr="error")
         with (
@@ -37,10 +41,10 @@ class TestCheckProjectScopes:
                 return_value={"github": {"host": "github.wellsfargo.com"}},
             ),
             pytest.raises(SystemExit),
+            caplog.at_level(logging.ERROR),
         ):
             gh_project.check_project_scopes()
-        captured = capsys.readouterr()
-        assert "gh auth refresh -h github.wellsfargo.com" in captured.out
+        assert "gh auth refresh -h github.wellsfargo.com" in caplog.text
 
     def test_passes_when_scopes_ok(self):
         """No error when gh API call succeeds."""

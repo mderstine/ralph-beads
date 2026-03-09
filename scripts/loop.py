@@ -30,6 +30,12 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from cli_utils import setup_logging  # noqa: E402
+
+logger = setup_logging(__name__)
+
 # ─── Constants ───────────────────────────────────────────────────────────────
 
 SIGNAL_GRACE = 30  # Seconds to wait for Claude to exit before force-kill
@@ -50,8 +56,8 @@ _iteration = 0
 
 
 def _print_summary() -> None:
-    print()
-    print(f"=== Loop finished after {_iteration} iteration(s) ===")
+    logger.info("")
+    logger.info("=== Loop finished after %d iteration(s) ===", _iteration)
     with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
         subprocess.run(["bd", "prime"], capture_output=True, timeout=10)
 
@@ -71,13 +77,13 @@ def _terminate_process(proc: subprocess.Popen) -> None:
     # Wait for grace period
     try:
         proc.wait(timeout=SIGNAL_GRACE)
-        print("Claude exited cleanly.")
+        logger.info("Claude exited cleanly.")
         return
     except subprocess.TimeoutExpired:
         pass
 
     # Force kill
-    print("Grace period expired. Force-killing Claude...")
+    logger.warning("Grace period expired. Force-killing Claude...")
     try:
         if sys.platform != "win32":
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
@@ -91,11 +97,15 @@ def _signal_handler(signum: int, _frame: object) -> None:
     global _shutdown_requested
     _shutdown_requested = True
     sig_name = signal.Signals(signum).name
-    print()
-    print(f"=== Signal received ({sig_name}). Shutting down gracefully... ===")
+    logger.info("")
+    logger.info("=== Signal received (%s). Shutting down gracefully... ===", sig_name)
 
     if _claude_proc is not None and _claude_proc.poll() is None:
-        print(f"Waiting for Claude (PID {_claude_proc.pid}) to exit (grace: {SIGNAL_GRACE}s)...")
+        logger.info(
+            "Waiting for Claude (PID %d) to exit (grace: %ds)...",
+            _claude_proc.pid,
+            SIGNAL_GRACE,
+        )
         _terminate_process(_claude_proc)
 
     _print_summary()
@@ -197,7 +207,7 @@ def _run_delegate(mode: str, passthrough_args: list[str]) -> None:
     }
     script = SCRIPTS_DIR / script_map[mode]
     label = {"sync": "GitHub Sync", "triage": "Issue Triage", "changelog": "Changelog"}[mode]
-    print(f"=== Purser: {label} ===")
+    logger.info("=== Purser: %s ===", label)
     result = subprocess.run([sys.executable, str(script), *passthrough_args])
     sys.exit(result.returncode)
 
@@ -211,12 +221,12 @@ def _preflight_checks() -> None:
 
     # 1. bd CLI available
     if shutil.which("bd") is None:
-        print("ERROR: bd (beads) CLI not found. Install with: npm install -g @beads/bd")
+        logger.error("bd (beads) CLI not found. Install with: npm install -g @beads/bd")
         errors += 1
 
     # 2. claude CLI available
     if shutil.which("claude") is None:
-        print("ERROR: claude CLI not found. Install Claude Code to continue.")
+        logger.error("claude CLI not found. Install Claude Code to continue.")
         errors += 1
 
     # 3. beads database accessible
@@ -224,16 +234,20 @@ def _preflight_checks() -> None:
         try:
             result = subprocess.run(["bd", "prime"], capture_output=True, text=True, timeout=15)
             if result.returncode != 0:
-                print("ERROR: bd prime failed — beads database may be corrupted or inaccessible.")
-                print("       Run 'bd prime' manually to see the error.")
+                logger.error(
+                    "bd prime failed — beads database may be corrupted or inaccessible."
+                )
+                logger.error("Run 'bd prime' manually to see the error.")
                 errors += 1
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            print("ERROR: bd prime failed — could not execute bd command.")
+            logger.error("bd prime failed — could not execute bd command.")
             errors += 1
 
     if errors > 0:
-        print()
-        print(f"Pre-flight failed with {errors} error(s). Fix the issues above and retry.")
+        logger.error("")
+        logger.error(
+            "Pre-flight failed with %d error(s). Fix the issues above and retry.", errors
+        )
         sys.exit(1)
 
     # 4. Warn if on main/master branch (non-fatal)
@@ -249,7 +263,7 @@ def _preflight_checks() -> None:
         branch = "unknown"
 
     if branch in ("main", "master"):
-        print(f"WARNING: Running on '{branch}' branch. Consider working on a feature branch.")
+        logger.warning("Running on '%s' branch. Consider working on a feature branch.", branch)
 
     # 5. Warn about uncommitted changes (non-fatal)
     try:

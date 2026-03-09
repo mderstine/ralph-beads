@@ -20,5 +20,8 @@ logs/
 .dolt/
 *.db
 
+# Environment variables (user-specific secrets)
+.env
+
 # Project config (user-specific, opt-in to commit)
 .purser.yml

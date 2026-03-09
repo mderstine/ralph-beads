@@ -36,6 +36,9 @@ import gh_labels  # noqa: E402
 import gh_project_setup  # noqa: E402
 import gh_remote  # noqa: E402
 import prereqs  # noqa: E402
+from cli_utils import setup_logging  # noqa: E402
+
+logger = setup_logging(__name__)
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -54,15 +57,15 @@ def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 
 def _print_header() -> None:
-    print()
-    print("=========================================")
-    print("  Purser Project Initialization")
-    print("=========================================")
-    print()
+    logger.info("")
+    logger.info("=========================================")
+    logger.info("  Purser Project Initialization")
+    logger.info("=========================================")
+    logger.info("")
 
 
 def _print_step(step: int, desc: str) -> None:
-    print(f"--- Step {step}: {desc} ---")
+    logger.info("--- Step %d: %s ---", step, desc)
 
 
 # ─── Steps ───────────────────────────────────────────────────────────────────
@@ -74,19 +77,19 @@ def step_prerequisites(*, check_only: bool) -> bool:
 
     result = prereqs.check_prerequisites()
     prereqs.print_report(result)
-    print()
+    logger.info("")
 
     if not result["all_ok"]:
-        print("Some prerequisites are missing. Install them and re-run init.")
+        logger.info("Some prerequisites are missing. Install them and re-run init.")
         tool_map = {t["name"]: t["found"] for t in result["tools"]}
         if not (tool_map.get("git", False) and tool_map.get("python3", False)):
-            print("ERROR: git and python3 are required. Cannot continue.")
+            logger.error("ERROR: git and python3 are required. Cannot continue.")
             sys.exit(1)
-        print("WARNING: Continuing with available tools (some features may be limited).")
-        print()
+        logger.warning("WARNING: Continuing with available tools (some features may be limited).")
+        logger.info("")
 
     if check_only:
-        print("Check complete.")
+        logger.info("Check complete.")
         sys.exit(0)
 
     return True
@@ -97,29 +100,29 @@ def step_venv() -> None:
     _print_step(2, "Python virtual environment (uv)")
 
     if shutil.which("uv") is None:
-        print("  WARNING: uv not found — skipping virtual environment setup.")
-        print("  Install uv and re-run init to set up the environment.")
-        print()
+        logger.warning("  WARNING: uv not found — skipping virtual environment setup.")
+        logger.info("  Install uv and re-run init to set up the environment.")
+        logger.info("")
         return
 
     venv_dir = REPO_ROOT / ".venv"
     if venv_dir.is_dir():
-        print("  .venv/ directory exists — syncing dependencies...")
+        logger.info("  .venv/ directory exists — syncing dependencies...")
         result = _run(["uv", "sync", "--project", str(REPO_ROOT)])
         if result.returncode != 0:
-            print("  WARNING: uv sync failed. Dependencies may be out of date.")
+            logger.warning("  WARNING: uv sync failed. Dependencies may be out of date.")
     else:
-        print("  Creating virtual environment...")
+        logger.info("  Creating virtual environment...")
         result = _run(["uv", "venv", str(venv_dir)])
         if result.returncode != 0:
-            print("  WARNING: uv venv failed.")
-        print("  Installing dependencies...")
+            logger.warning("  WARNING: uv venv failed.")
+        logger.info("  Installing dependencies...")
         result = _run(["uv", "sync", "--project", str(REPO_ROOT)])
         if result.returncode != 0:
-            print("  WARNING: uv sync failed.")
+            logger.warning("  WARNING: uv sync failed.")
 
-    print("  Virtual environment ready.")
-    print()
+    logger.info("  Virtual environment ready.")
+    logger.info("")
 
 
 def step_beads_db() -> None:
@@ -128,7 +131,7 @@ def step_beads_db() -> None:
 
     beads_dir = REPO_ROOT / ".beads"
     if beads_dir.is_dir():
-        print("  .beads/ directory exists — skipping initialization.")
+        logger.info("  .beads/ directory exists — skipping initialization.")
         # Count existing issues
         result = _run(["bd", "list", "--json"])
         if result.returncode == 0 and result.stdout.strip():
@@ -138,19 +141,19 @@ def step_beads_db() -> None:
                 count = 0
         else:
             count = 0
-        print(f"  Current issues: {count}")
+        logger.info("  Current issues: %d", count)
     else:
-        print("  Initializing beads database...")
+        logger.info("  Initializing beads database...")
         if shutil.which("bd") is not None:
             result = _run(["bd", "init"])
             if result.returncode != 0:
-                print("  WARNING: bd init failed. You may need to initialize manually.")
+                logger.warning("  WARNING: bd init failed. You may need to initialize manually.")
             else:
-                print("  Beads database initialized.")
+                logger.info("  Beads database initialized.")
         else:
-            print("  WARNING: bd CLI not found — skipping beads initialization.")
-            print("  Install bd and re-run init to initialize.")
-    print()
+            logger.warning("  WARNING: bd CLI not found — skipping beads initialization.")
+            logger.info("  Install bd and re-run init to initialize.")
+    logger.info("")
 
 
 def step_github_remote(*, skip_github: bool) -> tuple[str, str]:
@@ -158,8 +161,8 @@ def step_github_remote(*, skip_github: bool) -> tuple[str, str]:
     _print_step(4, "GitHub remote")
 
     if skip_github:
-        print("  Skipped (--skip-github).")
-        print()
+        logger.info("  Skipped (--skip-github).")
+        logger.info("")
         return "", ""
 
     # First, detect non-interactively
@@ -168,8 +171,8 @@ def step_github_remote(*, skip_github: bool) -> tuple[str, str]:
     if result["status"] == "found":
         remote = result["remote"]
         owner, repo = remote["owner"], remote["repo"]
-        print(f"  GitHub remote: {owner}/{repo}")
-        print()
+        logger.info("  GitHub remote: %s/%s", owner, repo)
+        logger.info("")
         return owner, repo
 
     if result["status"] == "skipped":
@@ -178,15 +181,15 @@ def step_github_remote(*, skip_github: bool) -> tuple[str, str]:
         if result["status"] in ("found", "created", "connected") and result["remote"]:
             remote = result["remote"]
             owner, repo = remote["owner"], remote["repo"]
-            print(f"  GitHub remote: {owner}/{repo}")
-            print()
+            logger.info("  GitHub remote: %s/%s", owner, repo)
+            logger.info("")
             return owner, repo
-        print("  GitHub remote: not configured (local-only mode)")
-        print()
+        logger.info("  GitHub remote: not configured (local-only mode)")
+        logger.info("")
         return "", ""
 
-    print(f"  GitHub remote: {result['status']}")
-    print()
+    logger.info("  GitHub remote: %s", result["status"])
+    logger.info("")
     return "", ""
 
 
@@ -196,10 +199,10 @@ def step_github_project(owner: str, repo: str, *, skip_github: bool) -> str:
 
     if skip_github or not owner or not repo:
         if skip_github:
-            print("  Skipped (--skip-github).")
+            logger.info("  Skipped (--skip-github).")
         else:
-            print("  Skipped (no GitHub remote configured).")
-        print()
+            logger.info("  Skipped (no GitHub remote configured).")
+        logger.info("")
         return ""
 
     # First, check non-interactively
@@ -207,33 +210,33 @@ def step_github_project(owner: str, repo: str, *, skip_github: bool) -> str:
 
     if result["status"] == "found" and result["project"]:
         project = result["project"]
-        print(f"  Found GitHub Project: {project['title']} (#{project['number']})")
-        print()
+        logger.info("  Found GitHub Project: %s (#%s)", project["title"], project["number"])
+        logger.info("")
         return str(project["number"])
 
     if result["status"] == "skipped":
         # No projects found — offer to create one interactively
-        print("  No GitHub Projects found.")
+        logger.info("  No GitHub Projects found.")
         try:
             answer = input("  Create a new project with default columns? [Y/n]: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print()
+            logger.info("")
             answer = "n"
 
         if not answer or answer.lower().startswith("y"):
             project = gh_project_setup.create_project(owner, repo)
             if project:
-                print(f"  Created GitHub Project #{project['number']}")
-                print()
+                logger.info("  Created GitHub Project #%s", project["number"])
+                logger.info("")
                 return str(project["number"])
-            print("  WARNING: Failed to create project.")
+            logger.warning("  WARNING: Failed to create project.")
         else:
-            print("  Skipped project creation.")
+            logger.info("  Skipped project creation.")
 
     else:
-        print(f"  GitHub Project: {result['status']}")
+        logger.info("  GitHub Project: %s", result["status"])
 
-    print()
+    logger.info("")
     return ""
 
 
@@ -243,22 +246,22 @@ def step_labels(owner: str, repo: str, *, skip_github: bool) -> None:
 
     if skip_github or not owner or not repo:
         if skip_github:
-            print("  Skipped (--skip-github).")
+            logger.info("  Skipped (--skip-github).")
         else:
-            print("  Skipped (no GitHub remote configured).")
-        print()
+            logger.info("  Skipped (no GitHub remote configured).")
+        logger.info("")
         return
 
     # Check if labels have already been bootstrapped
     labels_done = config.get("labels", "bootstrap", REPO_ROOT)
     if labels_done == "true":
-        print("  Labels already bootstrapped — skipping.")
-        print()
+        logger.info("  Labels already bootstrapped — skipping.")
+        logger.info("")
         return
 
-    print("  Bootstrapping GitHub labels...")
+    logger.info("  Bootstrapping GitHub labels...")
     gh_labels.setup_labels(dry_run=False)
-    print()
+    logger.info("")
 
 
 def step_save_config(owner: str, repo: str, project_number: str, *, skip_github: bool) -> None:
@@ -277,49 +280,49 @@ def step_save_config(owner: str, repo: str, project_number: str, *, skip_github:
         cfg["labels"]["bootstrap"] = "true"
 
     config.save_config(cfg, REPO_ROOT)
-    print("  Configuration saved to .purser.yml")
-    print()
+    logger.info("  Configuration saved to .purser.yml")
+    logger.info("")
 
 
 def step_summary() -> None:
     """Step 8: Print summary and next steps."""
-    print()
-    print("=========================================")
-    print("  Setup Summary")
-    print("=========================================")
-    print()
+    logger.info("")
+    logger.info("=========================================")
+    logger.info("  Setup Summary")
+    logger.info("=========================================")
+    logger.info("")
 
     # Beads
     beads_dir = REPO_ROOT / ".beads"
     if beads_dir.is_dir():
-        print("  Beads database: initialized")
+        logger.info("  Beads database: initialized")
     else:
-        print("  Beads database: not initialized")
+        logger.info("  Beads database: not initialized")
 
     # Config
     config_file = config.config_path(REPO_ROOT)
     if config_file.exists():
-        print(f"  Config file: {config_file}")
+        logger.info("  Config file: %s", config_file)
         owner = config.get("github", "owner", REPO_ROOT)
         repo = config.get("github", "repo", REPO_ROOT)
         project_number = config.get("github", "project_number", REPO_ROOT)
         if owner and repo:
-            print(f"  GitHub repo: {owner}/{repo}")
+            logger.info("  GitHub repo: %s/%s", owner, repo)
         else:
-            print("  GitHub repo: not configured")
+            logger.info("  GitHub repo: not configured")
         if project_number:
-            print(f"  GitHub Project: #{project_number}")
+            logger.info("  GitHub Project: #%s", project_number)
         else:
-            print("  GitHub Project: not configured")
+            logger.info("  GitHub Project: not configured")
     else:
-        print("  Config file: not created")
+        logger.info("  Config file: not created")
 
-    print()
-    print("Next steps:")
-    print("  1. Write specs in specs/ describing what to build")
-    print("  2. Run 'uv run purser-loop plan' to generate the task graph")
-    print("  3. Run 'uv run purser-loop' to start building")
-    print()
+    logger.info("")
+    logger.info("Next steps:")
+    logger.info("  1. Write specs in specs/ describing what to build")
+    logger.info("  2. Run 'uv run purser-loop plan' to generate the task graph")
+    logger.info("  3. Run 'uv run purser-loop' to start building")
+    logger.info("")
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────

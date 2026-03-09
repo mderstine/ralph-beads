@@ -183,13 +183,12 @@ class TestInstallInstructions:
 
 
 class TestPrintReport:
-    def test_prints_without_error(self, capsys):
+    def test_prints_without_error(self, caplog):
         result = prereqs.check_prerequisites()
         prereqs.print_report(result)
-        captured = capsys.readouterr()
-        assert "Platform:" in captured.out
+        assert "Platform:" in caplog.text
 
-    def test_shows_ok_for_found_tools(self, capsys):
+    def test_shows_ok_for_found_tools(self, caplog):
         result = {
             "platform": "linux-apt",
             "all_ok": True,
@@ -197,10 +196,9 @@ class TestPrintReport:
                        "version": "git 2.43", "install": "apt install git"}],
         }
         prereqs.print_report(result)
-        captured = capsys.readouterr()
-        assert "[ok]" in captured.out
+        assert "[ok]" in caplog.text
 
-    def test_shows_missing_with_install(self, capsys):
+    def test_shows_missing_with_install(self, caplog):
         result = {
             "platform": "macos",
             "all_ok": False,
@@ -208,9 +206,8 @@ class TestPrintReport:
                        "version": None, "install": "npm install -g @beads/bd"}],
         }
         prereqs.print_report(result)
-        captured = capsys.readouterr()
-        assert "[MISSING]" in captured.out
-        assert "npm install" in captured.out
+        assert "[MISSING]" in caplog.text
+        assert "npm install" in caplog.text
 
 
 class TestJsonOutput:

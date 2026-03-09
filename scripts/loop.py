@@ -234,9 +234,7 @@ def _preflight_checks() -> None:
         try:
             result = subprocess.run(["bd", "prime"], capture_output=True, text=True, timeout=15)
             if result.returncode != 0:
-                logger.error(
-                    "bd prime failed — beads database may be corrupted or inaccessible."
-                )
+                logger.error("bd prime failed — beads database may be corrupted or inaccessible.")
                 logger.error("Run 'bd prime' manually to see the error.")
                 errors += 1
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -245,9 +243,7 @@ def _preflight_checks() -> None:
 
     if errors > 0:
         logger.error("")
-        logger.error(
-            "Pre-flight failed with %d error(s). Fix the issues above and retry.", errors
-        )
+        logger.error("Pre-flight failed with %d error(s). Fix the issues above and retry.", errors)
         sys.exit(1)
 
     # 4. Warn if on main/master branch (non-fatal)
@@ -272,13 +268,13 @@ def _preflight_checks() -> None:
             ["git", "diff", "--cached", "--quiet"], capture_output=True, timeout=5
         )
         if diff_result.returncode != 0 or cached_result.returncode != 0:
-            print("WARNING: Uncommitted changes detected — these may conflict with loop commits:")
+            logger.warning("Uncommitted changes detected — these may conflict with loop commits:")
             status = subprocess.run(
                 ["git", "status", "--short"], capture_output=True, text=True, timeout=5
             )
             if status.returncode == 0:
                 for line in status.stdout.splitlines()[:10]:
-                    print(f"  {line}")
+                    logger.warning("  %s", line)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
@@ -358,18 +354,18 @@ def main(argv: list[str] | None = None) -> None:
 
     prompt_file = REPO_ROOT / f"PROMPT_{mode}.md"
     if not prompt_file.exists():
-        print(f"Error: {prompt_file.name} not found")
+        logger.error("Error: %s not found", prompt_file.name)
         sys.exit(1)
 
     # ─── Pre-flight ──────────────────────────────────────────────────────
     _preflight_checks()
 
-    print("=== Purser Loop ===")
-    print(f"Mode: {mode}")
-    print(f"Prompt: {prompt_file.name}")
-    print(f"Max iterations: {max_iterations or 'unlimited'}")
-    print(f"Iteration timeout: {iter_timeout}s")
-    print("========================")
+    logger.info("=== Purser Loop ===")
+    logger.info("Mode: %s", mode)
+    logger.info("Prompt: %s", prompt_file.name)
+    logger.info("Max iterations: %s", max_iterations or "unlimited")
+    logger.info("Iteration timeout: %ds", iter_timeout)
+    logger.info("========================")
 
     # Ensure logs directory exists
     logs_dir = REPO_ROOT / "logs"
@@ -380,7 +376,7 @@ def main(argv: list[str] | None = None) -> None:
         _iteration += 1
 
         if max_iterations > 0 and _iteration > max_iterations:
-            print(f"Reached max iterations ({max_iterations}). Stopping.")
+            logger.info("Reached max iterations (%d). Stopping.", max_iterations)
             break
 
         if _shutdown_requested:
@@ -391,20 +387,20 @@ def main(argv: list[str] | None = None) -> None:
         start_time = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
         log_file = logs_dir / f"{mode}-{start_time}-iter-{_iteration}.log"
 
-        print()
-        print(f"--- Iteration {_iteration} ({start_time}) ---")
+        logger.info("")
+        logger.info("--- Iteration %d (%s) ---", _iteration, start_time)
 
         # Check if there's work to do (build mode only)
         if mode == "build":
             ready_count = _get_ready_count()
             if ready_count == 0:
-                print("No ready work found. All tasks complete or blocked.")
-                print(
+                logger.info("No ready work found. All tasks complete or blocked.")
+                logger.info(
                     "Run 'uv run purser-loop plan' to generate new tasks, "
                     "or check blockers with 'bd list --status open'."
                 )
                 break
-            print(f"Ready work: {ready_count} issue(s)")
+            logger.info("Ready work: %d issue(s)", ready_count)
 
         # Snapshot closed issues before this iteration
         closed_before = _get_closed_issue_ids()
@@ -453,7 +449,7 @@ def main(argv: list[str] | None = None) -> None:
                     exit_code = 124
                     _terminate_process(_claude_proc)
         except FileNotFoundError:
-            print("ERROR: claude CLI not found during execution.")
+            logger.error("ERROR: claude CLI not found during execution.")
             exit_code = 1
         finally:
             _claude_proc = None
@@ -494,23 +490,25 @@ def main(argv: list[str] | None = None) -> None:
             break
 
         if timed_out:
-            print()
-            print(f"!!! TIMEOUT: Iteration {_iteration} exceeded {iter_timeout}s limit !!!")
-            print("The claimed beads issue has been left in_progress for retry.")
+            logger.info("")
+            logger.warning(
+                "!!! TIMEOUT: Iteration %d exceeded %ds limit !!!", _iteration, iter_timeout
+            )
+            logger.info("The claimed beads issue has been left in_progress for retry.")
             print("Press Enter to retry or Ctrl+C to stop.")
             try:
                 input()
             except (EOFError, KeyboardInterrupt):
                 break
         elif exit_code != 0:
-            print(f"Claude exited with code {exit_code}. Pausing for review.")
+            logger.warning("Claude exited with code %d. Pausing for review.", exit_code)
             print("Press Enter to continue or Ctrl+C to stop.")
             try:
                 input()
             except (EOFError, KeyboardInterrupt):
                 break
 
-        print(f"--- Iteration {_iteration} complete ({outcome}, {duration}s) ---")
+        logger.info("--- Iteration %d complete (%s, %ds) ---", _iteration, outcome, duration)
 
     _print_summary()
 

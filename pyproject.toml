@@ -24,6 +24,10 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["scripts"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+log_level = "INFO"
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100

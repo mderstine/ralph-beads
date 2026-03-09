@@ -54,7 +54,7 @@ class TestStepPrerequisites:
         assert exc_info.value.code == 1
 
     @patch("init.prereqs")
-    def test_warns_when_optional_missing(self, mock_prereqs, capsys):
+    def test_warns_when_optional_missing(self, mock_prereqs, caplog):
         mock_prereqs.check_prerequisites.return_value = {
             "all_ok": False,
             "platform": "linux-apt",
@@ -72,16 +72,14 @@ class TestStepPrerequisites:
         }
         result = init.step_prerequisites(check_only=False)
         assert result is True
-        captured = capsys.readouterr()
-        assert "WARNING" in captured.out
+        assert "WARNING" in caplog.text
 
 
 class TestStepVenv:
     @patch("shutil.which", return_value=None)
-    def test_skips_when_uv_missing(self, _, capsys):
+    def test_skips_when_uv_missing(self, _, caplog):
         init.step_venv()
-        captured = capsys.readouterr()
-        assert "uv not found" in captured.out
+        assert "uv not found" in caplog.text
 
     @patch("init._run")
     @patch("shutil.which", return_value="/usr/bin/uv")
@@ -107,32 +105,29 @@ class TestStepVenv:
 
 class TestStepBeadsDb:
     @patch("init._run")
-    def test_skips_when_beads_exists(self, mock_run, monkeypatch, tmp_path, capsys):
+    def test_skips_when_beads_exists(self, mock_run, monkeypatch, tmp_path, caplog):
         monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
         (tmp_path / ".beads").mkdir()
         mock_run.return_value = MagicMock(returncode=0, stdout="[]")
         init.step_beads_db()
-        captured = capsys.readouterr()
-        assert "exists" in captured.out
+        assert "exists" in caplog.text
 
     @patch("init._run")
     @patch("shutil.which", return_value="/usr/bin/bd")
-    def test_initializes_when_missing(self, _, mock_run, monkeypatch, tmp_path, capsys):
+    def test_initializes_when_missing(self, _, mock_run, monkeypatch, tmp_path, caplog):
         monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
         mock_run.return_value = MagicMock(returncode=0)
         init.step_beads_db()
-        captured = capsys.readouterr()
-        assert "Initializing" in captured.out
+        assert "Initializing" in caplog.text
 
 
 class TestStepGithubRemote:
     @patch("init.gh_remote")
-    def test_skips_when_skip_github(self, _, capsys):
+    def test_skips_when_skip_github(self, _, caplog):
         owner, repo = init.step_github_remote(skip_github=True)
         assert owner == ""
         assert repo == ""
-        captured = capsys.readouterr()
-        assert "Skipped" in captured.out
+        assert "Skipped" in caplog.text
 
     @patch("init.gh_remote")
     def test_returns_owner_repo_when_found(self, mock_remote):
@@ -161,13 +156,12 @@ class TestStepGithubRemote:
 
 
 class TestStepGithubProject:
-    def test_skips_when_skip_github(self, capsys):
+    def test_skips_when_skip_github(self, caplog):
         result = init.step_github_project("owner", "repo", skip_github=True)
         assert result == ""
-        captured = capsys.readouterr()
-        assert "Skipped" in captured.out
+        assert "Skipped" in caplog.text
 
-    def test_skips_when_no_remote(self, capsys):
+    def test_skips_when_no_remote(self):
         result = init.step_github_project("", "", skip_github=False)
         assert result == ""
 
@@ -182,24 +176,21 @@ class TestStepGithubProject:
 
 
 class TestStepLabels:
-    def test_skips_when_skip_github(self, capsys):
+    def test_skips_when_skip_github(self, caplog):
         init.step_labels("owner", "repo", skip_github=True)
-        captured = capsys.readouterr()
-        assert "Skipped" in captured.out
+        assert "Skipped" in caplog.text
 
-    def test_skips_when_no_remote(self, capsys):
+    def test_skips_when_no_remote(self, caplog):
         init.step_labels("", "", skip_github=False)
-        captured = capsys.readouterr()
-        assert "Skipped" in captured.out
+        assert "Skipped" in caplog.text
 
     @patch("init.gh_labels")
     @patch("init.config")
-    def test_skips_when_already_bootstrapped(self, mock_config, mock_labels, capsys):
+    def test_skips_when_already_bootstrapped(self, mock_config, mock_labels, caplog):
         mock_config.get.return_value = "true"
         init.step_labels("owner", "repo", skip_github=False)
         mock_labels.setup_labels.assert_not_called()
-        captured = capsys.readouterr()
-        assert "already bootstrapped" in captured.out
+        assert "already bootstrapped" in caplog.text
 
     @patch("init.gh_labels")
     @patch("init.config")
@@ -236,16 +227,15 @@ class TestStepSaveConfig:
 
 
 class TestStepSummary:
-    def test_prints_summary(self, monkeypatch, tmp_path, capsys):
+    def test_prints_summary(self, monkeypatch, tmp_path, caplog):
         monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
         # Create .beads dir and config
         (tmp_path / ".beads").mkdir()
         monkeypatch.setattr(init.config, "config_path", lambda root: tmp_path / ".purser.yml")
         monkeypatch.setattr(init.config, "get", lambda s, k, root=None: "")
         init.step_summary()
-        captured = capsys.readouterr()
-        assert "Setup Summary" in captured.out
-        assert "Next steps:" in captured.out
+        assert "Setup Summary" in caplog.text
+        assert "Next steps:" in caplog.text
 
 
 class TestMainHelpFlag:

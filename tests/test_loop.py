@@ -191,7 +191,7 @@ class TestPreflightChecks:
 
     @patch("subprocess.run")
     @patch("shutil.which", return_value="/usr/bin/tool")
-    def test_warns_on_main_branch(self, mock_which, mock_run, capsys):
+    def test_warns_on_main_branch(self, mock_which, mock_run, caplog):
         def run_side_effect(cmd, **kwargs):
             if cmd == ["bd", "prime"]:
                 return MagicMock(returncode=0)
@@ -201,9 +201,8 @@ class TestPreflightChecks:
 
         mock_run.side_effect = run_side_effect
         loop._preflight_checks()
-        captured = capsys.readouterr()
-        assert "WARNING" in captured.out
-        assert "main" in captured.out
+        assert "WARNING" in caplog.text
+        assert "main" in caplog.text
 
 
 class TestMainExitsOnNoPromptFile:

@@ -31,7 +31,7 @@ class TestGetExistingLabels:
 
 class TestCreateLabel:
     @patch("subprocess.run")
-    def test_creates_label(self, mock_run, capsys):
+    def test_creates_label(self, mock_run, caplog):
         mock_run.return_value = MagicMock(returncode=0)
         gh_labels.create_label("type:bug", "d73a4a", "Bug label", dry_run=False)
         mock_run.assert_called_once()
@@ -40,13 +40,11 @@ class TestCreateLabel:
         assert "label" in cmd
         assert "create" in cmd
         assert "type:bug" in cmd
-        captured = capsys.readouterr()
-        assert "created: type:bug" in captured.out
+        assert "created: type:bug" in caplog.text
 
-    def test_dry_run_does_not_call_gh(self, capsys):
+    def test_dry_run_does_not_call_gh(self, caplog):
         gh_labels.create_label("type:bug", "d73a4a", "Bug label", dry_run=True)
-        captured = capsys.readouterr()
-        assert "would create: type:bug" in captured.out
+        assert "would create: type:bug" in caplog.text
 
 
 class TestSetupLabels:
@@ -58,7 +56,7 @@ class TestSetupLabels:
 
     @patch("gh_labels.create_label")
     @patch("gh_labels.get_existing_labels", return_value={"type:bug", "priority:0"})
-    def test_skips_existing_labels(self, mock_existing, mock_create, capsys):
+    def test_skips_existing_labels(self, mock_existing, mock_create, caplog):
         gh_labels.setup_labels(dry_run=False)
         # Should not create type:bug or priority:0
         created_names = [c.args[0] for c in mock_create.call_args_list]
@@ -66,25 +64,23 @@ class TestSetupLabels:
         assert "priority:0" not in created_names
         # Should still create others
         assert len(created_names) == len(gh_labels.LABELS) - 2
-        captured = capsys.readouterr()
-        assert "skip: type:bug (exists)" in captured.out
+        assert "skip: type:bug (exists)" in caplog.text
 
     @patch("gh_labels.create_label")
     @patch("gh_labels.get_existing_labels")
-    def test_skips_all_when_all_exist(self, mock_existing, mock_create, capsys):
+    def test_skips_all_when_all_exist(self, mock_existing, mock_create):
         mock_existing.return_value = {name for _, name, _, _ in gh_labels.LABELS}
         gh_labels.setup_labels(dry_run=False)
         mock_create.assert_not_called()
 
     @patch("gh_labels.create_label")
     @patch("gh_labels.get_existing_labels", return_value=set())
-    def test_prints_categories(self, mock_existing, mock_create, capsys):
+    def test_prints_categories(self, mock_existing, mock_create, caplog):
         gh_labels.setup_labels(dry_run=False)
-        captured = capsys.readouterr()
-        assert "Issue types:" in captured.out
-        assert "Priorities:" in captured.out
-        assert "Workflow:" in captured.out
-        assert "Done." in captured.out
+        assert "Issue types:" in caplog.text
+        assert "Priorities:" in caplog.text
+        assert "Workflow:" in caplog.text
+        assert "Done." in caplog.text
 
 
 class TestLabelDefinitions:

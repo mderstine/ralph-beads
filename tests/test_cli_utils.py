@@ -27,12 +27,11 @@ class TestRequireCommands:
             cli_utils.require_commands(["git", "nonexistent_tool_xyz_123"])
         assert exc_info.value.code == 1
 
-    def test_prints_error_for_each_missing(self, capsys):
+    def test_prints_error_for_each_missing(self, caplog):
         with pytest.raises(SystemExit):
             cli_utils.require_commands(["missing_aaa", "missing_bbb"])
-        captured = capsys.readouterr()
-        assert "missing_aaa" in captured.err
-        assert "missing_bbb" in captured.err
+        assert "missing_aaa" in caplog.text
+        assert "missing_bbb" in caplog.text
 
     def test_empty_list_passes(self):
         cli_utils.require_commands([])
@@ -60,12 +59,11 @@ class TestRequireGhAuth:
         assert exc_info.value.code == 1
 
     @patch("subprocess.run")
-    def test_prints_auth_message_on_failure(self, mock_run, capsys):
+    def test_prints_auth_message_on_failure(self, mock_run, caplog):
         mock_run.return_value = MagicMock(returncode=1)
         with pytest.raises(SystemExit):
             cli_utils.require_gh_auth()
-        captured = capsys.readouterr()
-        assert "gh auth login" in captured.err
+        assert "gh auth login" in caplog.text
 
 
 class TestRunPythonScript:

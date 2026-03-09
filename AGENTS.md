@@ -37,6 +37,8 @@ bd prime                     # Session context summary
 
 ### General
 - Python 3.12+ — use latest idioms: `match` statements, `type X = ...` aliases, `X | Y` union types, f-strings
+- Use `pathlib.Path` for all path operations — never `os.path`
+- Use `logging` for all diagnostic output — never bare `print()`. Reserve `print()` only for program output (JSON, generated content) and interactive prompts
 - Type annotations on public APIs
 - All new functionality must have unit tests
 - Develop modularly: small, focused functions with clear interfaces

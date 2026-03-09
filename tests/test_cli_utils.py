@@ -137,3 +137,75 @@ class TestRunPythonScript:
 
         call_args = mock_run.call_args[0][0]
         assert len(call_args) == 2  # [python, script]
+
+
+class TestSetupLogging:
+    def test_returns_logger_with_name(self):
+        logger = cli_utils.setup_logging("test.module")
+        assert logger.name == "test.module"
+
+    def test_default_level_is_info(self):
+        import logging
+
+        logger = cli_utils.setup_logging("test.default_level")
+        assert logger.level == logging.INFO
+
+    def test_custom_default_level(self):
+        import logging
+
+        logger = cli_utils.setup_logging("test.custom_level", default_level=logging.DEBUG)
+        assert logger.level == logging.DEBUG
+
+    def test_env_overrides_default(self, monkeypatch):
+        import logging
+
+        monkeypatch.setenv("PURSER_LOG_LEVEL", "WARNING")
+        logger = cli_utils.setup_logging("test.env_override")
+        assert logger.level == logging.WARNING
+
+    def test_invalid_env_falls_back_to_default(self, monkeypatch):
+        import logging
+
+        monkeypatch.setenv("PURSER_LOG_LEVEL", "BOGUS")
+        logger = cli_utils.setup_logging("test.invalid_env")
+        assert logger.level == logging.INFO
+
+    def test_empty_env_falls_back_to_default(self, monkeypatch):
+        import logging
+
+        monkeypatch.setenv("PURSER_LOG_LEVEL", "")
+        logger = cli_utils.setup_logging("test.empty_env")
+        assert logger.level == logging.INFO
+
+    def test_root_logger_gets_handler(self):
+        import logging
+
+        # Clear root handlers to test setup
+        root = logging.getLogger()
+        original_handlers = root.handlers[:]
+        root.handlers.clear()
+        try:
+            cli_utils.setup_logging("test.handler_check")
+            assert len(root.handlers) >= 1
+            assert isinstance(root.handlers[0], logging.StreamHandler)
+        finally:
+            root.handlers = original_handlers
+
+    def test_format_is_message_only(self):
+        import logging
+
+        root = logging.getLogger()
+        original_handlers = root.handlers[:]
+        root.handlers.clear()
+        try:
+            cli_utils.setup_logging("test.format")
+            handler = root.handlers[0]
+            assert handler.formatter._fmt == "%(message)s"
+        finally:
+            root.handlers = original_handlers
+
+    def test_none_name_configures_root(self):
+        import logging
+
+        logger = cli_utils.setup_logging(None)
+        assert logger is logging.getLogger()

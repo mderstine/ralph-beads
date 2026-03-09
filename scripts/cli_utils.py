@@ -6,6 +6,7 @@ with cross-platform Python equivalents. Used by all converted shell wrappers.
 Uses only Python stdlib.
 """
 
+import logging
 import os
 import shutil
 import subprocess
@@ -76,3 +77,40 @@ def run_python_script(script_path: str | Path, args: list[str] | None = None) ->
     else:
         # Unix: replace this process entirely (like bash exec)
         os.execvp(cmd[0], cmd)
+
+
+def setup_logging(
+    name: str | None = None,
+    *,
+    default_level: int = logging.INFO,
+) -> logging.Logger:
+    """Configure logging for a Purser CLI script.
+
+    Sets up a simple, human-readable log format (message only, no timestamps)
+    with level controllable via the ``PURSER_LOG_LEVEL`` environment variable.
+
+    Args:
+        name: Logger name (typically ``__name__``). ``None`` configures the root logger.
+        default_level: Fallback level when ``PURSER_LOG_LEVEL`` is not set.
+
+    Returns:
+        The configured logger instance.
+
+    Environment:
+        PURSER_LOG_LEVEL: One of DEBUG, INFO, WARNING, ERROR, CRITICAL.
+    """
+    env_level = os.environ.get("PURSER_LOG_LEVEL", "").upper()
+    level = getattr(logging, env_level, None) if env_level else None
+    if not isinstance(level, int):
+        level = default_level
+
+    # Configure the root logger only once
+    root = logging.getLogger()
+    if not root.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        root.addHandler(handler)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    return logger

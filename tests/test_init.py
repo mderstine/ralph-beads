@@ -120,6 +120,19 @@ class TestStepBeadsDb:
         init.step_beads_db()
         assert "Initializing" in caplog.text
 
+    @patch("init._run")
+    @patch("shutil.which", return_value="/usr/bin/bd")
+    def test_logs_full_error_on_bd_init_failure(self, _, mock_run, monkeypatch, tmp_path, caplog):
+        monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stderr="dolt: database already exists at .beads/",
+        )
+        init.step_beads_db()
+        assert "bd init failed" in caplog.text
+        assert "database already exists" in caplog.text
+        assert "ERROR" in caplog.text
+
 
 class TestStepGithubRemote:
     @patch("init.gh_remote")

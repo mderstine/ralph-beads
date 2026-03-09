@@ -147,7 +147,10 @@ def step_beads_db() -> None:
         if shutil.which("bd") is not None:
             result = _run(["bd", "init"])
             if result.returncode != 0:
-                logger.warning("  WARNING: bd init failed. You may need to initialize manually.")
+                logger.error("  bd init failed (exit %d).", result.returncode)
+                if result.stderr.strip():
+                    logger.error("  %s", result.stderr.strip())
+                logger.error("  You may need to initialize manually: bd init")
             else:
                 logger.info("  Beads database initialized.")
         else:

@@ -3,11 +3,11 @@
 add_spec.py: Draft a polished spec from a user prompt and save to specs/ directory.
 """
 
-import os
 import sys
 from datetime import date
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import slugify
 
 
@@ -41,8 +41,8 @@ def main():
     title = sys.argv[1]
     description = sys.argv[2]
     slug = slugify(title)
-    out_path = os.path.join("specs", f"{slug}.md")
-    os.makedirs("specs", exist_ok=True)
+    out_path = Path("specs") / f"{slug}.md"
+    out_path.parent.mkdir(exist_ok=True)
     with open(out_path, "w") as f:
         f.write(draft_spec(title, description))
     print(f"Spec saved to {out_path}")

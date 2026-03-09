@@ -6,7 +6,6 @@ that the planning loop can decompose into beads tasks.
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -182,9 +181,9 @@ def main():
         number = issue["number"]
         title = issue["title"]
         slug = slugify(title)
-        spec_path = f"specs/{slug}.md"
+        spec_path = Path("specs") / f"{slug}.md"
 
-        if os.path.exists(spec_path):
+        if spec_path.exists():
             print(f'  skip: #{number} "{title}" -> {spec_path} (file exists)')
             continue
 
@@ -195,7 +194,7 @@ def main():
             created += 1
             continue
 
-        os.makedirs("specs", exist_ok=True)
+        spec_path.parent.mkdir(exist_ok=True)
         with open(spec_path, "w") as f:
             f.write(spec_content)
 

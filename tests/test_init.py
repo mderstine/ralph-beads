@@ -144,6 +144,21 @@ class TestStepGithubRemote:
         assert owner == "testowner"
         assert repo == "testrepo"
 
+    @patch("init.gh_remote")
+    def test_returns_owner_repo_when_connected(self, mock_remote):
+        # First call (check_only=True) finds nothing, second call returns connected
+        mock_remote.detect_or_create.side_effect = [
+            {"status": "skipped", "remote": None},
+            {
+                "status": "connected",
+                "remote": {"owner": "org", "repo": "myrepo", "name": "origin"},
+                "validated": True,
+            },
+        ]
+        owner, repo = init.step_github_remote(skip_github=False)
+        assert owner == "org"
+        assert repo == "myrepo"
+
 
 class TestStepGithubProject:
     def test_skips_when_skip_github(self, capsys):

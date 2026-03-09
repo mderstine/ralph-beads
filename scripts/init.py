@@ -175,7 +175,7 @@ def step_github_remote(*, skip_github: bool) -> tuple[str, str]:
     if result["status"] == "skipped":
         # No remote found — run interactively to allow creation
         result = gh_remote.detect_or_create(check_only=False)
-        if result["status"] in ("found", "created") and result["remote"]:
+        if result["status"] in ("found", "created", "connected") and result["remote"]:
             remote = result["remote"]
             owner, repo = remote["owner"], remote["repo"]
             print(f"  GitHub remote: {owner}/{repo}")

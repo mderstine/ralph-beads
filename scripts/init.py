@@ -125,11 +125,28 @@ def step_venv() -> None:
     logger.info("")
 
 
-def step_beads_db() -> None:
+def step_beads_db(*, reinit_beads: bool = False, yes: bool = False) -> None:
     """Step 3: Initialize beads database."""
     _print_step(3, "Beads database")
 
     beads_dir = REPO_ROOT / ".beads"
+    if beads_dir.is_dir() and reinit_beads:
+        logger.warning("  WARNING: --reinit-beads will permanently delete all existing issues.")
+        logger.warning("  This cannot be undone.")
+        if not yes:
+            try:
+                answer = input("  Destroy existing beads database and reinitialize? [y/N]: ")
+                answer = answer.strip()
+            except (EOFError, KeyboardInterrupt):
+                logger.info("")
+                logger.info("  Aborted.")
+                return
+            if not answer.lower().startswith("y"):
+                logger.info("  Aborted.")
+                return
+        logger.info("  Deleting existing beads database...")
+        shutil.rmtree(beads_dir)
+
     if beads_dir.is_dir():
         logger.info("  .beads/ directory exists — skipping initialization.")
         # Count existing issues
@@ -337,13 +354,17 @@ def main(argv: list[str] | None = None) -> None:
 
     check_only = "--check" in argv
     skip_github = "--skip-github" in argv
+    reinit_beads = "--reinit-beads" in argv
+    yes = "--yes" in argv or "-y" in argv
 
     if "-h" in argv or "--help" in argv:
-        print("Usage: init.py [--check] [--skip-github]")
+        print("Usage: init.py [--check] [--skip-github] [--reinit-beads [--yes]]")
         print()
         print("Options:")
         print("  --check         Check prerequisites only, no prompts")
         print("  --skip-github   Skip GitHub remote, projects, and label setup")
+        print("  --reinit-beads  Delete and reinitialize the beads database (DESTRUCTIVE)")
+        print("  --yes, -y       Skip confirmation prompts (use with --reinit-beads)")
         print("  -h, --help      Show this help message")
         return
 
@@ -356,7 +377,7 @@ def main(argv: list[str] | None = None) -> None:
     step_venv()
 
     # Step 3
-    step_beads_db()
+    step_beads_db(reinit_beads=reinit_beads, yes=yes)
 
     # Step 4
     owner, repo = step_github_remote(skip_github=skip_github)

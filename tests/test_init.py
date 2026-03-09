@@ -133,6 +133,62 @@ class TestStepBeadsDb:
         assert "database already exists" in caplog.text
         assert "ERROR" in caplog.text
 
+    @patch("init._run")
+    @patch("shutil.which", return_value="/usr/bin/bd")
+    def test_reinit_beads_with_yes_deletes_and_reinits(
+        self, _, mock_run, monkeypatch, tmp_path, caplog
+    ):
+        monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
+        (tmp_path / ".beads").mkdir()
+        mock_run.return_value = MagicMock(returncode=0)
+        init.step_beads_db(reinit_beads=True, yes=True)
+        assert not (tmp_path / ".beads").exists()
+        assert "Deleting" in caplog.text
+        assert "WARNING" in caplog.text
+
+    @patch("init._run")
+    @patch("shutil.which", return_value="/usr/bin/bd")
+    def test_reinit_beads_prompts_for_confirmation(
+        self, _, mock_run, monkeypatch, tmp_path, caplog
+    ):
+        monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
+        (tmp_path / ".beads").mkdir()
+        mock_run.return_value = MagicMock(returncode=0)
+        monkeypatch.setattr("builtins.input", lambda _: "n")
+        init.step_beads_db(reinit_beads=True, yes=False)
+        # Aborted — .beads/ should still exist
+        assert (tmp_path / ".beads").exists()
+        assert "Aborted" in caplog.text
+
+    @patch("init._run")
+    @patch("shutil.which", return_value="/usr/bin/bd")
+    def test_reinit_beads_proceeds_when_confirmed(
+        self, _, mock_run, monkeypatch, tmp_path, caplog
+    ):
+        monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
+        (tmp_path / ".beads").mkdir()
+        mock_run.return_value = MagicMock(returncode=0)
+        monkeypatch.setattr("builtins.input", lambda _: "y")
+        init.step_beads_db(reinit_beads=True, yes=False)
+        assert not (tmp_path / ".beads").exists()
+        assert "Deleting" in caplog.text
+
+    def test_reinit_beads_no_op_when_beads_missing(self, monkeypatch, tmp_path, caplog):
+        monkeypatch.setattr(init, "REPO_ROOT", tmp_path)
+        # No .beads/ — reinit_beads=True is a no-op; falls through to normal init
+        with patch("shutil.which", return_value=None):
+            init.step_beads_db(reinit_beads=True, yes=True)
+        # No warning about destruction since .beads/ didn't exist
+        assert "permanently delete" not in caplog.text
+
+
+class TestMainFlags:
+    def test_help_includes_reinit_beads(self, capsys):
+        init.main(["--help"])
+        captured = capsys.readouterr()
+        assert "--reinit-beads" in captured.out
+        assert "--yes" in captured.out
+
 
 class TestStepGithubRemote:
     @patch("init.gh_remote")

@@ -302,6 +302,27 @@ def _prompt_yes_no(question: str, default: bool = True) -> bool:
     return answer in ("y", "yes")
 
 
+def _prompt_menu(options: list[str]) -> int | None:
+    """Display a numbered menu and return the selected index (0-based), or None."""
+    try:
+        for i, option in enumerate(options, 1):
+            print(f"  {i}. {option}")
+        choice = input("  Choose [1]: ").strip()
+        if not choice:
+            return 0
+        idx = int(choice) - 1
+        if 0 <= idx < len(options):
+            return idx
+        print(f"  Invalid choice: {choice}", file=sys.stderr)
+        return None
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+    except ValueError:
+        print("  Invalid input.", file=sys.stderr)
+        return None
+
+
 def _prompt_select(projects: list[dict]) -> dict | None:
     """Present a selection menu for multiple projects."""
     print()
@@ -428,25 +449,64 @@ def detect_or_setup(
         }
 
     print("\nNo GitHub Projects found for this repository.")
-    if not _prompt_yes_no("  Create a new project with default columns?"):
+    choice = _prompt_menu(
+        [
+            "Attach to an existing GitHub Project",
+            "Create a new GitHub Project",
+            "Skip (no project board)",
+        ]
+    )
+
+    # Attach to existing
+    if choice == 0:
+        available = list_owner_projects(owner)
+        if not available:
+            print("  No projects found for your account.", file=sys.stderr)
+            return {
+                "status": "skipped",
+                "project": None,
+                "message": "No projects available to attach.",
+            }
+        selected = _prompt_select(available)
+        if not selected:
+            return {
+                "status": "declined",
+                "project": None,
+                "message": "No project selected.",
+            }
+        linked = link_project_to_repo(selected["id"], owner, repo)
+        if not linked:
+            return {
+                "status": "error",
+                "project": None,
+                "message": f"Failed to link project '{selected['title']}' to repository.",
+            }
         return {
-            "status": "declined",
-            "project": None,
-            "message": "User declined project creation.",
+            "status": "found",
+            "project": selected,
+            "message": f"Attached project: {selected['title']} (#{selected['number']})",
         }
 
-    project = create_project(owner, repo)
-    if not project:
+    # Create new
+    if choice == 1:
+        project = create_project(owner, repo)
+        if not project:
+            return {
+                "status": "error",
+                "project": None,
+                "message": "Failed to create GitHub Project.",
+            }
         return {
-            "status": "error",
-            "project": None,
-            "message": "Failed to create GitHub Project.",
+            "status": "created",
+            "project": project,
+            "message": f"Created project: {project['title']} (#{project['number']})",
         }
 
+    # Skip or cancelled
     return {
-        "status": "created",
-        "project": project,
-        "message": f"Created project: {project['title']} (#{project['number']})",
+        "status": "declined",
+        "project": None,
+        "message": "GitHub Projects setup skipped.",
     }
 
 

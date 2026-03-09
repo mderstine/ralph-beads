@@ -289,3 +289,146 @@ class TestLinkProjectToRepo:
     def test_fails_on_mutation_error(self, _, __):
         result = gh_project_setup.link_project_to_repo("PVT_1", "owner", "repo")
         assert result is False
+
+
+_NO_PROJECT_CFG = {
+    "github": {
+        "remote": "origin",
+        "owner": "o",
+        "repo": "r",
+        "auto_create": "prompt",
+        "project_number": "",
+    },
+    "labels": {"bootstrap": "false"},
+}
+
+
+class TestDetectOrSetupMenu:
+    """Tests for the 3-option menu when no projects are linked."""
+
+    @patch("gh_project_setup._has_gh", return_value=True)
+    @patch("gh_project_setup.list_projects", return_value=[])
+    @patch("gh_project_setup.config.load_config", return_value=_NO_PROJECT_CFG)
+    @patch("gh_project_setup._prompt_menu", return_value=0)
+    @patch("gh_project_setup.list_owner_projects")
+    @patch("gh_project_setup._prompt_select")
+    @patch("gh_project_setup.link_project_to_repo", return_value=True)
+    def test_attach_existing_success(
+        self, mock_link, mock_select, mock_list_owner, mock_menu, *_
+    ):
+        mock_list_owner.return_value = [
+            {"id": "PVT_1", "title": "My Board", "number": 5, "url": ""},
+        ]
+        mock_select.return_value = {
+            "id": "PVT_1",
+            "title": "My Board",
+            "number": 5,
+            "url": "",
+        }
+        result = gh_project_setup.detect_or_setup("o", "r")
+        assert result["status"] == "found"
+        assert result["project"]["number"] == 5
+        assert "Attached" in result["message"]
+        mock_link.assert_called_once_with("PVT_1", "o", "r")
+
+    @patch("gh_project_setup._has_gh", return_value=True)
+    @patch("gh_project_setup.list_projects", return_value=[])
+    @patch("gh_project_setup.config.load_config", return_value=_NO_PROJECT_CFG)
+    @patch("gh_project_setup._prompt_menu", return_value=0)
+    @patch("gh_project_setup.list_owner_projects", return_value=[])
+    def test_attach_no_projects_available(self, *_):
+        result = gh_project_setup.detect_or_setup("o", "r")
+        assert result["status"] == "skipped"
+        assert "No projects available" in result["message"]
+
+    @patch("gh_project_setup._has_gh", return_value=True)
+    @patch("gh_project_setup.list_projects", return_value=[])
+    @patch("gh_project_setup.config.load_config", return_value=_NO_PROJECT_CFG)
+    @patch("gh_project_setup._prompt_menu", return_value=0)
+    @patch("gh_project_setup.list_owner_projects")
+    @patch("gh_project_setup._prompt_select", return_value=None)
+    def test_attach_user_cancels_selection(self, mock_select, mock_list_owner, *_):
+        mock_list_owner.return_value = [
+            {"id": "PVT_1", "title": "A", "number": 1, "url": ""},
+        ]
+        result = gh_project_setup.detect_or_setup("o", "r")
+        assert result["status"] == "declined"
+
+    @patch("gh_project_setup._has_gh", return_value=True)
+    @patch("gh_project_setup.list_projects", return_value=[])
+    @patch("gh_project_setup.config.load_config", return_value=_NO_PROJECT_CFG)
+    @patch("gh_project_setup._prompt_menu", return_value=0)
+    @patch("gh_project_setup.list_owner_projects")
+    @patch("gh_project_setup._prompt_select")
+    @patch("gh_project_setup.link_project_to_repo", return_value=False)
+    def test_attach_link_fails(self, mock_link, mock_select, mock_list_owner, *_):
+        mock_list_owner.return_value = [
+            {"id": "PVT_1", "title": "A", "number": 1, "url": ""},
+        ]
+        mock_select.return_value = {
+            "id": "PVT_1",
+            "title": "A",
+            "number": 1,
+            "url": "",
+        }
+        result = gh_project_setup.detect_or_setup("o", "r")
+        assert result["status"] == "error"
+
+    @patch("gh_project_setup._has_gh", return_value=True)
+    @patch("gh_project_setup.list_projects", return_value=[])
+    @patch("gh_project_setup.config.load_config", return_value=_NO_PROJECT_CFG)
+    @patch("gh_project_setup._prompt_menu", return_value=1)
+    @patch("gh_project_setup.create_project")
+    def test_create_new_via_menu(self, mock_create, *_):
+        mock_create.return_value = {
+            "id": "PVT_2",
+            "title": "Purser",
+            "number": 1,
+            "url": "",
+        }
+        result = gh_project_setup.detect_or_setup("o", "r")
+        assert result["status"] == "created"
+        mock_create.assert_called_once_with("o", "r")
+
+    @patch("gh_project_setup._has_gh", return_value=True)
+    @patch("gh_project_setup.list_projects", return_value=[])
+    @patch("gh_project_setup.config.load_config", return_value=_NO_PROJECT_CFG)
+    @patch("gh_project_setup._prompt_menu", return_value=2)
+    def test_skip_via_menu(self, *_):
+        result = gh_project_setup.detect_or_setup("o", "r")
+        assert result["status"] == "declined"
+
+    @patch("gh_project_setup._has_gh", return_value=True)
+    @patch("gh_project_setup.list_projects", return_value=[])
+    @patch("gh_project_setup.config.load_config", return_value=_NO_PROJECT_CFG)
+    @patch("gh_project_setup._prompt_menu", return_value=None)
+    def test_cancelled_menu(self, *_):
+        result = gh_project_setup.detect_or_setup("o", "r")
+        assert result["status"] == "declined"
+
+
+class TestPromptMenu:
+    @patch("builtins.input", return_value="")
+    def test_default_is_first(self, _):
+        result = gh_project_setup._prompt_menu(["A", "B", "C"])
+        assert result == 0
+
+    @patch("builtins.input", return_value="2")
+    def test_selects_second(self, _):
+        result = gh_project_setup._prompt_menu(["A", "B", "C"])
+        assert result == 1
+
+    @patch("builtins.input", return_value="99")
+    def test_out_of_range_returns_none(self, _):
+        result = gh_project_setup._prompt_menu(["A", "B"])
+        assert result is None
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_eof_returns_none(self, _):
+        result = gh_project_setup._prompt_menu(["A"])
+        assert result is None
+
+    @patch("builtins.input", return_value="abc")
+    def test_non_numeric_returns_none(self, _):
+        result = gh_project_setup._prompt_menu(["A"])
+        assert result is None

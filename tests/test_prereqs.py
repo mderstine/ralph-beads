@@ -78,6 +78,60 @@ class TestGetPythonVersion:
         mock_gv.assert_called_once_with("python", "--version")
 
 
+class TestParsePythonVersion:
+    def test_standard_version(self):
+        assert prereqs._parse_python_version("Python 3.12.4") == (3, 12)
+
+    def test_alpha_version(self):
+        assert prereqs._parse_python_version("Python 3.13.0a1") == (3, 13)
+
+    def test_bare_numbers(self):
+        assert prereqs._parse_python_version("3.11.2") == (3, 11)
+
+    def test_garbage_returns_none(self):
+        assert prereqs._parse_python_version("not a version") is None
+
+    def test_empty_string_returns_none(self):
+        assert prereqs._parse_python_version("") is None
+
+
+class TestCheckPythonMinVersion:
+    def test_meets_minimum(self):
+        assert prereqs._check_python_min_version("Python 3.12.0") is True
+
+    def test_exceeds_minimum(self):
+        assert prereqs._check_python_min_version("Python 3.13.1") is True
+
+    def test_below_minimum(self):
+        assert prereqs._check_python_min_version("Python 3.11.9") is False
+
+    def test_way_below(self):
+        assert prereqs._check_python_min_version("Python 2.7.18") is False
+
+    def test_none_input(self):
+        assert prereqs._check_python_min_version(None) is False
+
+    def test_unparseable_input(self):
+        assert prereqs._check_python_min_version("garbage") is False
+
+
+class TestCheckPrerequisitesVersionGating:
+    @patch.object(prereqs, "_get_python_version", return_value="Python 3.11.5")
+    def test_old_python_marked_not_found(self, _mock):
+        result = prereqs.check_prerequisites()
+        tool_map = {t["name"]: t for t in result["tools"]}
+        py = tool_map["python3"]
+        assert py["found"] is False
+        assert "need 3.12+" in py["version"]
+
+    @patch.object(prereqs, "_get_python_version", return_value="Python 3.12.0")
+    def test_adequate_python_marked_found(self, _mock):
+        result = prereqs.check_prerequisites()
+        tool_map = {t["name"]: t for t in result["tools"]}
+        assert tool_map["python3"]["found"] is True
+        assert tool_map["python3"]["version"] == "Python 3.12.0"
+
+
 class TestCheckPrerequisites:
     def test_returns_required_keys(self):
         result = prereqs.check_prerequisites()

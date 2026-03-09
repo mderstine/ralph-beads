@@ -11,6 +11,7 @@ Usage:
 
 import json
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -50,6 +51,9 @@ _PYTHON_FALLBACKS: dict[str, list[tuple[str, ...]]] = {
     "windows": [("python", "--version"), ("py", "-3", "--version")],
     "default": [("python3", "--version"), ("python", "--version")],
 }
+
+# Minimum required Python version (major, minor).
+_PYTHON_MIN_VERSION: tuple[int, int] = (3, 12)
 
 # Install instructions per platform
 INSTALL_INSTRUCTIONS: dict[str, dict[str, str]] = {
@@ -121,6 +125,28 @@ def _get_python_version(plat: str) -> str | None:
     return None
 
 
+def _parse_python_version(version_str: str) -> tuple[int, int] | None:
+    """Extract (major, minor) from a Python version string.
+
+    Handles formats like "Python 3.12.4", "Python 3.12.0a1", etc.
+    Returns None if the string cannot be parsed.
+    """
+    match = re.search(r"(\d+)\.(\d+)", version_str)
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    return None
+
+
+def _check_python_min_version(version_str: str | None) -> bool:
+    """Return True if *version_str* satisfies the minimum Python version."""
+    if version_str is None:
+        return False
+    parsed = _parse_python_version(version_str)
+    if parsed is None:
+        return False
+    return parsed >= _PYTHON_MIN_VERSION
+
+
 def check_prerequisites() -> dict:
     """Check all prerequisites and return structured results.
 
@@ -145,12 +171,19 @@ def check_prerequisites() -> dict:
     all_ok = True
 
     for command, version_flag, description in REQUIRED_TOOLS:
-        # Python needs special handling: try platform-specific fallbacks.
+        # Python needs special handling: try platform-specific fallbacks
+        # and enforce a minimum version.
         if command == "python3":
             version = _get_python_version(plat)
+            if version is not None and not _check_python_min_version(version):
+                min_maj, min_min = _PYTHON_MIN_VERSION
+                version = f"{version} (need {min_maj}.{min_min}+)"
+                found = False
+            else:
+                found = version is not None
         else:
             version = _get_version(command, version_flag)
-        found = version is not None
+            found = version is not None
         if not found:
             all_ok = False
 

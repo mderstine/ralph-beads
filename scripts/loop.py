@@ -35,6 +35,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -344,6 +345,119 @@ def _get_ready_count() -> int:
     return 0
 
 
+# ─── VS Code executor ─────────────────────────────────────────────────────────
+
+
+def _run_vscode_executor(
+    mode: str,
+    prompt_file: Path,
+    logs_dir: Path,
+    iteration: int,
+    iter_timeout: int,
+    batch: bool,
+) -> tuple[int, bool]:
+    """Run one iteration using VS Code GitHub Copilot Agents.
+
+    Writes a session context file for the user to open in VS Code Copilot.
+    In batch mode, exits immediately after writing the file (single-shot).
+    In interactive mode, polls for a sentinel file or waits for user input.
+
+    Returns: (exit_code, timed_out)
+    """
+    # Gather project context from bd prime
+    bd_prime_output = "(bd prime unavailable)"
+    try:
+        result = subprocess.run(["bd", "prime"], capture_output=True, text=True, timeout=15)
+        if result.returncode == 0:
+            bd_prime_output = result.stdout.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Build session file content
+    prompt_content = prompt_file.read_text(encoding="utf-8")
+    session_file = logs_dir / f"vscode-session-{iteration}.md"
+    sentinel_file = logs_dir / f"vscode-done-{iteration}"
+
+    session_content = (
+        f"---\n"
+        f"iteration: {iteration}\n"
+        f"mode: {mode}\n"
+        f"prompt: {prompt_file.name}\n"
+        f"sentinel: {sentinel_file.name}\n"
+        f"---\n\n"
+        f"# Purser VS Code Session — Iteration {iteration}\n\n"
+        f"## How to use this file\n\n"
+        f"1. Open this file in VS Code Copilot agent mode\n"
+        f"2. The agent will read the prompt below and execute one iteration\n"
+        f"3. When the agent finishes, create the sentinel file to signal completion:\n"
+        f"   ```\n"
+        f"   touch {sentinel_file}\n"
+        f"   ```\n\n"
+        f"## Project Context (bd prime)\n\n"
+        f"```\n{bd_prime_output}\n```\n\n"
+        f"## Prompt\n\n"
+        f"{prompt_content}\n"
+    )
+    session_file.write_text(session_content, encoding="utf-8")
+    logger.info("VS Code session file: %s", session_file)
+    logger.info("Sentinel (create when done): %s", sentinel_file)
+
+    # Try to open in VS Code if available
+    if shutil.which("code"):
+        try:
+            subprocess.Popen(["code", str(session_file)])
+            logger.info("Opened session file in VS Code.")
+        except OSError:
+            pass
+
+    # Batch mode: write file and signal caller to stop the loop
+    if batch:
+        logger.info(
+            "Batch mode: session file written. "
+            "Open it in VS Code Copilot to run the agent, then trigger the next iteration."
+        )
+        return 0, False
+
+    # Interactive mode: race between sentinel file appearing and user pressing Enter
+    logger.info("")
+    logger.info("Waiting for VS Code Copilot agent to complete...")
+    logger.info("  Option 1: Create sentinel file when done: touch %s", sentinel_file)
+    logger.info("  Option 2: Press Enter here to signal completion manually.")
+
+    done_event = threading.Event()
+
+    def _poll_sentinel() -> None:
+        deadline = time.time() + iter_timeout
+        while time.time() < deadline:
+            if sentinel_file.exists() or done_event.is_set():
+                done_event.set()
+                return
+            time.sleep(2)
+        done_event.set()
+
+    def _wait_input() -> None:
+        with contextlib.suppress(EOFError, KeyboardInterrupt, OSError):
+            input()
+        done_event.set()
+
+    threading.Thread(target=_poll_sentinel, daemon=True).start()
+    threading.Thread(target=_wait_input, daemon=True).start()
+
+    start = time.time()
+    done_event.wait(timeout=iter_timeout + 1)
+    elapsed = time.time() - start
+
+    timed_out = elapsed >= iter_timeout and not sentinel_file.exists()
+    exit_code = 124 if timed_out else 0
+
+    if sentinel_file.exists():
+        logger.info("Sentinel file detected — agent session complete.")
+    elif not timed_out:
+        logger.info("Agent session signalled complete.")
+
+    return exit_code, timed_out
+
+
 # ─── Main loop ────────────────────────────────────────────────────────────────
 
 
@@ -437,54 +551,70 @@ def main(argv: list[str] | None = None) -> None:
         # Snapshot closed issues before this iteration
         closed_before = _get_closed_issue_ids()
 
-        # Run Claude with timeout
-        prompt_content = prompt_file.read_text(encoding="utf-8")
-        claude_cmd = [
-            "claude",
-            "-p",
-            "--output-format=stream-json",
-            "--verbose",
-            "--model",
-            "opus",
-        ]
-
         exit_code = 1
         timed_out = False
-        try:
-            # Create process group on Unix for clean group termination
-            kwargs: dict = {}
-            if sys.platform != "win32":
-                kwargs["start_new_session"] = True
 
-            with open(log_file, "w", encoding="utf-8") as log_fh:
-                _claude_proc = subprocess.Popen(
-                    claude_cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=log_fh,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    **kwargs,
-                )
-                # Feed the prompt via stdin
-                try:
-                    if _claude_proc.stdin is not None:
-                        _claude_proc.stdin.write(prompt_content)
-                        _claude_proc.stdin.close()
-                except BrokenPipeError:
-                    pass
+        if agent == "vscode":
+            exit_code, timed_out = _run_vscode_executor(
+                mode=mode,
+                prompt_file=prompt_file,
+                logs_dir=logs_dir,
+                iteration=_iteration,
+                iter_timeout=iter_timeout,
+                batch=batch,
+            )
+            # In batch mode the vscode executor writes one session file then returns;
+            # break the loop so the VS Code task exits cleanly.
+            if batch:
+                logger.info("--- Iteration %d complete (vscode-batch) ---", _iteration)
+                break
+        else:
+            # Run Claude with timeout
+            prompt_content = prompt_file.read_text(encoding="utf-8")
+            claude_cmd = [
+                "claude",
+                "-p",
+                "--output-format=stream-json",
+                "--verbose",
+                "--model",
+                "opus",
+            ]
 
-                try:
-                    _claude_proc.wait(timeout=iter_timeout)
-                    exit_code = _claude_proc.returncode
-                except subprocess.TimeoutExpired:
-                    timed_out = True
-                    exit_code = 124
-                    _terminate_process(_claude_proc)
-        except FileNotFoundError:
-            logger.error("ERROR: claude CLI not found during execution.")
-            exit_code = 1
-        finally:
-            _claude_proc = None
+            try:
+                # Create process group on Unix for clean group termination
+                kwargs: dict = {}
+                if sys.platform != "win32":
+                    kwargs["start_new_session"] = True
+
+                with open(log_file, "w", encoding="utf-8") as log_fh:
+                    _claude_proc = subprocess.Popen(
+                        claude_cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=log_fh,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        **kwargs,
+                    )
+                    # Feed the prompt via stdin
+                    try:
+                        if _claude_proc.stdin is not None:
+                            _claude_proc.stdin.write(prompt_content)
+                            _claude_proc.stdin.close()
+                    except BrokenPipeError:
+                        pass
+
+                    try:
+                        _claude_proc.wait(timeout=iter_timeout)
+                        exit_code = _claude_proc.returncode
+                    except subprocess.TimeoutExpired:
+                        timed_out = True
+                        exit_code = 124
+                        _terminate_process(_claude_proc)
+            except FileNotFoundError:
+                logger.error("ERROR: claude CLI not found during execution.")
+                exit_code = 1
+            finally:
+                _claude_proc = None
 
         # Compute duration and outcome
         duration = int(time.time() - iter_start)
@@ -536,7 +666,7 @@ def main(argv: list[str] | None = None) -> None:
             except (EOFError, KeyboardInterrupt):
                 break
         elif exit_code != 0:
-            logger.warning("Claude exited with code %d. Pausing for review.", exit_code)
+            logger.warning("Agent exited with code %d. Pausing for review.", exit_code)
             if batch:
                 logger.info("Batch mode: exiting on error.")
                 break

@@ -2,6 +2,7 @@
 
 import json
 import sys
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -256,6 +257,112 @@ class TestPreflightChecks:
         loop._preflight_checks(agent="claude")
         assert "WARNING" in caplog.text
         assert "main" in caplog.text
+
+
+class TestVscodeExecutor:
+    def test_batch_writes_session_file_and_returns_success(self, tmp_path):
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+        prompt_file = tmp_path / "PROMPT_build.md"
+        prompt_file.write_text("## Build prompt content")
+
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("subprocess.Popen"),
+            patch("shutil.which", return_value="/usr/bin/code"),
+        ):
+            mock_run.return_value = MagicMock(returncode=0, stdout="bd prime output")
+            exit_code, timed_out = loop._run_vscode_executor(
+                mode="build",
+                prompt_file=prompt_file,
+                logs_dir=logs_dir,
+                iteration=1,
+                iter_timeout=60,
+                batch=True,
+            )
+
+        assert exit_code == 0
+        assert timed_out is False
+        session_file = logs_dir / "vscode-session-1.md"
+        assert session_file.exists()
+        content = session_file.read_text()
+        assert "iteration: 1" in content
+        assert "bd prime output" in content
+        assert "## Build prompt content" in content
+        assert "vscode-done-1" in content
+
+    def test_batch_writes_session_file_without_code_cli(self, tmp_path):
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+        prompt_file = tmp_path / "PROMPT_plan.md"
+        prompt_file.write_text("## Plan prompt")
+
+        with patch("subprocess.run") as mock_run, patch("shutil.which", return_value=None):
+            mock_run.return_value = MagicMock(returncode=0, stdout="context")
+            exit_code, timed_out = loop._run_vscode_executor(
+                mode="plan",
+                prompt_file=prompt_file,
+                logs_dir=logs_dir,
+                iteration=3,
+                iter_timeout=60,
+                batch=True,
+            )
+
+        assert exit_code == 0
+        assert timed_out is False
+        assert (logs_dir / "vscode-session-3.md").exists()
+
+    def test_interactive_succeeds_via_sentinel_file(self, tmp_path):
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+        prompt_file = tmp_path / "PROMPT_build.md"
+        prompt_file.write_text("prompt")
+        sentinel_file = logs_dir / "vscode-done-1"
+
+        def create_sentinel_after_delay() -> None:
+            time.sleep(0.1)
+            sentinel_file.touch()
+
+        with patch("subprocess.run") as mock_run, patch("shutil.which", return_value=None):
+            mock_run.return_value = MagicMock(returncode=0, stdout="ctx")
+            import threading as _threading
+
+            _threading.Thread(target=create_sentinel_after_delay, daemon=True).start()
+            exit_code, timed_out = loop._run_vscode_executor(
+                mode="build",
+                prompt_file=prompt_file,
+                logs_dir=logs_dir,
+                iteration=1,
+                iter_timeout=5,
+                batch=False,
+            )
+
+        assert exit_code == 0
+        assert timed_out is False
+
+    def test_bd_prime_failure_gracefully_handled(self, tmp_path):
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+        prompt_file = tmp_path / "PROMPT_build.md"
+        prompt_file.write_text("prompt")
+        sentinel_file = logs_dir / "vscode-done-1"
+        sentinel_file.touch()  # pre-create sentinel so it exits fast
+
+        with patch("subprocess.run") as mock_run, patch("shutil.which", return_value=None):
+            mock_run.return_value = MagicMock(returncode=1, stdout="")
+            exit_code, timed_out = loop._run_vscode_executor(
+                mode="build",
+                prompt_file=prompt_file,
+                logs_dir=logs_dir,
+                iteration=1,
+                iter_timeout=5,
+                batch=False,
+            )
+
+        # Should still succeed — bd prime failure is non-fatal
+        assert exit_code == 0
+        content = (logs_dir / "vscode-session-1.md").read_text()
+        assert "bd prime unavailable" in content
 
 
 class TestMainExitsOnNoPromptFile:

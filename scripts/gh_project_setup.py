@@ -232,7 +232,10 @@ def create_project(owner: str, repo: str, title: str = "Purser") -> dict | None:
 
 
 def _configure_status_field(project_id: str) -> None:
-    """Update the Status field to have the default columns."""
+    """Ensure the Status field exists on the project and has the default columns.
+
+    Creates the Status field if absent, then updates its options to match DEFAULT_COLUMNS.
+    """
     # Get fields to find the Status field ID
     data = _gql(
         """
@@ -253,11 +256,16 @@ def _configure_status_field(project_id: str) -> None:
         projectId=project_id,
     )
     if not data:
+        logger.warning("  WARNING: Failed to query project fields — Status columns not configured.")
         return
 
     try:
         fields = data["data"]["node"]["fields"]["nodes"]
     except (KeyError, TypeError):
+        logger.warning(
+            "  WARNING: Unexpected response from project fields query — "
+            "Status columns not configured."
+        )
         return
 
     status_field_id = None
@@ -266,14 +274,42 @@ def _configure_status_field(project_id: str) -> None:
             status_field_id = f["id"]
             break
 
-    if not status_field_id:
-        return
-
     opts_str = ", ".join(
         f'{{name: "{c["name"]}", color: {c["color"]}, description: "{c["description"]}"}}'
         for c in DEFAULT_COLUMNS
     )
-    _gql(
+
+    if not status_field_id:
+        # Status field doesn't exist on new project — create it with DEFAULT_COLUMNS
+        create_data = _gql(
+            f"""
+            mutation($projectId: ID!) {{
+                createProjectV2Field(input: {{
+                    projectId: $projectId
+                    dataType: SINGLE_SELECT
+                    name: "Status"
+                    singleSelectOptions: [{opts_str}]
+                }}) {{
+                    projectV2Field {{
+                        ... on ProjectV2SingleSelectField {{
+                            id name options {{ id name }}
+                        }}
+                    }}
+                }}
+            }}
+        """,
+            projectId=project_id,
+        )
+        if not create_data:
+            logger.warning(
+                "  WARNING: Failed to create Status field — project board columns not configured."
+            )
+        else:
+            logger.info("  Created Status field with default columns.")
+        return
+
+    # Status field exists — update its options to match DEFAULT_COLUMNS
+    update_data = _gql(
         f"""
         mutation($fieldId: ID!) {{
             updateProjectV2Field(input: {{
@@ -290,6 +326,8 @@ def _configure_status_field(project_id: str) -> None:
     """,
         fieldId=status_field_id,
     )
+    if not update_data:
+        logger.warning("  WARNING: Failed to update Status field options.")
 
 
 def _prompt_yes_no(question: str, default: bool = True) -> bool:
